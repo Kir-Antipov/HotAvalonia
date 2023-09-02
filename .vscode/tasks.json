@@ -1,5 +1,19 @@
 {
   "version": "2.0.0",
   "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": [
+        "build",
+        "${workspaceFolder}/HotAvalonia.sln",
+        "/property:Configuration=Debug",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary",
+        "-tl",
+      ],
+      "problemMatcher": "$msCompile",
+    },
   ],
 }
