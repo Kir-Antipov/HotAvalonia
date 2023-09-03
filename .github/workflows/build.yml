@@ -1,0 +1,49 @@
+name: build
+
+on:
+  push:
+    branches:
+      - master
+      - development
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+  DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION: true
+  NUGET_XMLDOC_MODE: skip
+  BUILD_OUTPUT: ${{ github.workspace }}/dist
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@main
+
+      - name: Restore dependencies
+        run: dotnet restore -tl
+
+      - name: Build (Debug)
+        run: dotnet build -tl -c Debug --no-restore
+
+      - name: Build (Release)
+        run: dotnet build -tl -c Release --no-restore
+
+      - name: Run tests
+        run: dotnet test -tl -c Release --no-build
+
+      - name: Create NuGet packages
+        run: dotnet pack -tl -c Release --no-build -o "${{ env.BUILD_OUTPUT }}"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          if-no-files-found: error
+          path: ${{ env.BUILD_OUTPUT }}/*.nupkg
