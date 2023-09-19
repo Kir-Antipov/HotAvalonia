@@ -13,6 +13,7 @@
 | **Package** | **Latest Version** |
 |:------------|:-------------------|
 | HotAvalonia | [![NuGet](https://img.shields.io/nuget/v/HotAvalonia?style=flat&logo=nuget&label=nuget&cacheSeconds=3600)](https://nuget.org/packages/HotAvalonia/ "Download HotAvalonia from NuGet.org") |
+| HotAvalonia.Extensions | [![NuGet](https://img.shields.io/nuget/v/HotAvalonia.Extensions?style=flat&logo=nuget&label=nuget&cacheSeconds=3600)](https://nuget.org/packages/HotAvalonia.Extensions/ "Download HotAvalonia.Extensions from NuGet.org") |
 
 ----
 
