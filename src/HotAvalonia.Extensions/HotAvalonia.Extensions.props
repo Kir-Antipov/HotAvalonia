@@ -1,0 +1,7 @@
+<Project>
+  <ItemGroup>
+    <Compile Update="@(Compile)">
+      <Visible Condition="'%(NuGetItemType)' == 'Compile' and '%(NuGetPackageId)' == 'HotAvalonia.Extensions'">false</Visible>
+    </Compile>
+  </ItemGroup>
+</Project>

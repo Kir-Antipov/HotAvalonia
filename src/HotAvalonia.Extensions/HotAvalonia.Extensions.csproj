@@ -8,7 +8,15 @@
     <IsPackable>true</IsPackable>
     <Description>Provides utility extension methods for HotAvalonia, making it simpler to enable or disable the hot reload feature as needed.</Description>
     <PackageTags>avalonia avaloniaui hot-reload dynamic hot reload xaml axaml ui development tools extensions net netstandard</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="HotAvalonia.Extensions.props" PackagePath="build" Pack="true" />
+    <None Include="AvaloniaHotReloadExtensions.cs" PackagePath="contentFiles/cs/netstandard2.0/" Pack="true" BuildAction="Compile" />
+    <None Include="AvaloniaHotReloadExtensions.cs" PackagePath="contentFiles/cs/netstandard2.1/" Pack="true" BuildAction="Compile" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../HotAvalonia/HotAvalonia.csproj" PrivateAssets="All" />
