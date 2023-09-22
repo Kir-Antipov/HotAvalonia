@@ -2,6 +2,17 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": ".NET Launch (Demo)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/samples/HotReloadDemo/bin/Debug/net8.0/HotReloadDemo.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/samples/HotReloadDemo",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+    },
+    {
       "name": ".NET Attach",
       "type": "coreclr",
       "request": "attach",

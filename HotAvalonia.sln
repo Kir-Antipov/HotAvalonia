@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HotAvalonia", "src/HotAvalo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HotAvalonia.Extensions", "src/HotAvalonia.Extensions/HotAvalonia.Extensions.csproj", "{B196D2B3-DCDE-48A2-B783-590E19B396C4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HotReloadDemo", "samples/HotReloadDemo/HotReloadDemo.csproj", "{692200A4-8EDB-493C-A2D2-B10CDE68DA0B}"
+EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
         Debug|Any CPU = Debug|Any CPU
@@ -23,5 +25,9 @@ Global
         {B196D2B3-DCDE-48A2-B783-590E19B396C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
         {B196D2B3-DCDE-48A2-B783-590E19B396C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
         {B196D2B3-DCDE-48A2-B783-590E19B396C4}.Release|Any CPU.Build.0 = Release|Any CPU
+        {692200A4-8EDB-493C-A2D2-B10CDE68DA0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {692200A4-8EDB-493C-A2D2-B10CDE68DA0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {692200A4-8EDB-493C-A2D2-B10CDE68DA0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {692200A4-8EDB-493C-A2D2-B10CDE68DA0B}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal
