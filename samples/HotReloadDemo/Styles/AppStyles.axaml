@@ -1,0 +1,14 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Button.Ok">
+    <Setter Property="Background" Value="#56AB4D"/>
+    <Setter Property="Foreground" Value="#FFFFFF"/>
+  </Style>
+
+  <Style Selector="Button.Cancel">
+    <Setter Property="Background" Value="#F47474"/>
+    <Setter Property="Foreground" Value="#FFFFFF"/>
+  </Style>
+
+</Styles>

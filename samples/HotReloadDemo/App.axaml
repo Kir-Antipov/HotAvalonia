@@ -8,4 +8,9 @@
     <local:ViewLocator/>
   </Application.DataTemplates>
 
+  <Application.Styles>
+    <FluentTheme/>
+    <StyleInclude Source="/Styles/AppStyles.axaml"/>
+  </Application.Styles>
+
 </Application>
