@@ -13,4 +13,12 @@
     <StyleInclude Source="/Styles/AppStyles.axaml"/>
   </Application.Styles>
 
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Resources/AppResources.axaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
 </Application>
