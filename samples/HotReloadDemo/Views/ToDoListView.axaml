@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HotReloadDemo.ViewModels"
+             xmlns:c="using:HotReloadDemo.Controls"
+             mc:Ignorable="d" d:DesignWidth="250" d:DesignHeight="450"
+             x:Class="HotReloadDemo.Views.ToDoListView"
+             x:DataType="vm:ToDoListViewModel">
+
+  <DockPanel>
+    <Button DockPanel.Dock="Bottom"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Center"
+            Command="{ReflectionBinding $parent[Window].DataContext.AddItem}">
+      Add Item
+    </Button>
+    <ItemsControl ItemsSource="{Binding ToDoItems}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <c:ToDoItemControl/>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </DockPanel>
+
+</UserControl>
