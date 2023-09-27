@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HotReloadDemo.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="450"
+        x:Class="HotReloadDemo.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Width="300" Height="450"
+        WindowStartupLocation="CenterScreen"
+        Topmost="true"
+        Icon="/Assets/icon.ico"
+        CanResize="false"
+        Content="{Binding Content}"
+        Title="HotReloadDemo">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel/>
+  </Design.DataContext>
+
+</Window>
