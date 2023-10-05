@@ -50,7 +50,8 @@ namespace HotAvalonia
         /// <summary>
         /// A mapping between Avalonia <see cref="Application"/> instances and their associated hot reload context.
         /// </summary>
-        private static readonly ConditionalWeakTable<Application, AvaloniaHotReloadContext> s_apps = new();
+        private static readonly ConditionalWeakTable<Application, AvaloniaHotReloadContext> s_apps =
+            new ConditionalWeakTable<Application, AvaloniaHotReloadContext>();
 
         /// <summary>
         /// Enables hot reload functionality for the given Avalonia application.
@@ -62,7 +63,7 @@ namespace HotAvalonia
             _ = app ?? throw new ArgumentNullException(nameof(app));
             _ = appFilePath ?? throw new ArgumentNullException(nameof(appFilePath));
 
-            if (!s_apps.TryGetValue(app, out AvaloniaHotReloadContext context))
+            if (!s_apps.TryGetValue(app, out AvaloniaHotReloadContext? context))
             {
                 string appXamlFilePath = SourceCodeFileNameToXamlFileName(appFilePath);
                 if (!File.Exists(appXamlFilePath))
