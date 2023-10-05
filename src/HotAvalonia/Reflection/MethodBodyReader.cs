@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
+using HotAvalonia.Helpers;
 
 #if NETSTANDARD2_0
 using BitConverter = HotAvalonia.Helpers.BitHelper;
@@ -14,17 +15,6 @@ namespace HotAvalonia.Reflection;
 /// </summary>
 internal struct MethodBodyReader
 {
-    /// <summary>
-    /// A flag representing a 16-bit opcode value.
-    /// </summary>
-    private const short Int16OpCodeFlag = 0xFE;
-
-    /// <summary>
-    /// A dictionary containing <see cref="OpCodes"/> mapped to their respective opcode values.
-    /// </summary>
-    private static readonly Lazy<Dictionary<short, OpCode>> s_opCodes = new(
-        static () => GetAllOpCodes().ToDictionary(static x => x.Value));
-
     /// <summary>
     /// The byte sequence that constitutes the method body.
     /// </summary>
@@ -80,7 +70,7 @@ internal struct MethodBodyReader
             if (size is 0)
                 return Array.Empty<byte>();
 
-            return _methodBody.Slice(_position + size, GetOperandSize(_opCode.OperandType)).Span;
+            return _methodBody.Slice(_position + size, _opCode.OperandType.GetOperandSize()).Span;
         }
     }
 
@@ -91,7 +81,7 @@ internal struct MethodBodyReader
     {
         get
         {
-            if (_opCode.Value != OpCodes.Switch.Value)
+            if (_opCode.Value is not OpCodeHelper.SwitchValue)
                 return Array.Empty<int>();
 
             int start = _position + sizeof(byte) + sizeof(int);
@@ -112,28 +102,15 @@ internal struct MethodBodyReader
     {
         ReadOnlySpan<byte> methodBody = _methodBody.Span;
         int nextPosition = _bytesConsumed;
-        if (nextPosition >= methodBody.Length)
+        if (!OpCodeHelper.TryReadOpCode(methodBody.Slice(nextPosition), out OpCode newOpCode))
             return false;
 
-        short newOpCodeValue = methodBody[nextPosition];
-        int operandStart = nextPosition + 1;
-        if (newOpCodeValue >= Int16OpCodeFlag)
-        {
-            if (operandStart >= methodBody.Length)
-                return false;
-
-            newOpCodeValue = (short)((newOpCodeValue << 8) | methodBody[operandStart]);
-            ++operandStart;
-        }
-
-        if (!s_opCodes.Value.TryGetValue(newOpCodeValue, out OpCode newOpCode))
-            return false;
-
-        int nextBytesConsumed = operandStart + GetOperandSize(newOpCode.OperandType);
+        int operandStart = nextPosition + newOpCode.Size;
+        int nextBytesConsumed = operandStart + newOpCode.OperandType.GetOperandSize();
         if (nextBytesConsumed > methodBody.Length)
             return false;
 
-        if (newOpCode.Value == OpCodes.Switch.Value)
+        if (newOpCode.Value is OpCodeHelper.SwitchValue)
         {
             int n = BitConverter.ToInt32(methodBody.Slice(operandStart));
             nextBytesConsumed += n * sizeof(int);
@@ -157,7 +134,7 @@ internal struct MethodBodyReader
     /// The zero-based index of the first occurrence of the specified op code in the method body;
     /// or -1 if the opcode is not found.
     /// </returns>
-    public static int IndexOf(ReadOnlyMemory<byte> methodBody, short opCode)
+    public static int IndexOf(ReadOnlyMemory<byte> methodBody, int opCode)
     {
         MethodBodyReader reader = new(methodBody);
         while (reader.Next())
@@ -373,53 +350,12 @@ internal struct MethodBodyReader
     /// <exception cref="InvalidOperationException">Thrown when the operand size does not match the expected size.</exception>
     private readonly void EnsureOperandSize(int size)
     {
-        if (GetOperandSize(_opCode) == size)
+        if (_opCode.GetOperandSize() == size)
             return;
 
-        ThrowInvalidOperationException_SizeDoesNotMatch(size, GetOperandSize(_opCode));
+        ThrowInvalidOperationException_SizeDoesNotMatch(size, _opCode.GetOperandSize());
 
         static void ThrowInvalidOperationException_SizeDoesNotMatch(int expectedSize, int actualSize)
             => throw new InvalidOperationException($"The operand size ({actualSize} bytes) does not match the expected size ({expectedSize} bytes).");
-    }
-
-    /// <summary>
-    /// Calculates the size of the operand associated with the given opcode.
-    /// </summary>
-    /// <param name="opCode">The operation code in question.</param>
-    /// <returns>
-    /// The size of the operand in bytes; or 0 if the opcode has no operand.
-    /// </returns>
-    private static int GetOperandSize(OpCode opCode)
-        => opCode.Size is 0 ? 0 : GetOperandSize(opCode.OperandType);
-
-    /// <summary>
-    /// Determines the size of an operand based on its type.
-    /// </summary>
-    /// <param name="operandType">The type of the operand.</param>
-    /// <returns>
-    /// The size of the operand in bytes.
-    /// </returns>
-    public static int GetOperandSize(OperandType operandType) => operandType switch
-    {
-        OperandType.InlineBrTarget or OperandType.InlineField or OperandType.InlineI
-            or OperandType.InlineMethod or OperandType.InlineSig or OperandType.InlineString
-            or OperandType.InlineSwitch or OperandType.InlineTok or OperandType.InlineType
-            or OperandType.ShortInlineR => sizeof(int),
-        OperandType.InlineI8 or OperandType.InlineR => sizeof(long),
-        OperandType.InlineVar => sizeof(short),
-        OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => sizeof(byte),
-        _ => 0,
-    };
-
-    /// <summary>
-    /// Retrieves all opcodes defined in the <see cref="OpCodes"/> class.
-    /// </summary>
-    /// <returns>
-    /// All opcodes defined in the <see cref="OpCodes"/> class.
-    /// </returns>
-    private static IEnumerable<OpCode> GetAllOpCodes()
-    {
-        FieldInfo[] fields = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static);
-        return fields.Where(static x => x.FieldType == typeof(OpCode)).Select(static x => (OpCode)x.GetValue(null));
     }
 }

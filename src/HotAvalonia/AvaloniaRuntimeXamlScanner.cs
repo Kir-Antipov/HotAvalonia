@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Reflection.Emit;
 using HotAvalonia.Helpers;
 using HotAvalonia.Reflection;
 
@@ -196,9 +195,9 @@ public static class AvaloniaRuntimeXamlScanner
         if (methodBody is null)
             return false;
 
-        int ldstrLocation = methodBody.Length > commonLdstrLocation && methodBody[commonLdstrLocation] == OpCodes.Ldstr.Value
+        int ldstrLocation = methodBody.Length > commonLdstrLocation && methodBody[commonLdstrLocation] == OpCodeHelper.LdstrValue
             ? commonLdstrLocation
-            : MethodBodyReader.IndexOf(methodBody, OpCodes.Ldstr.Value);
+            : MethodBodyReader.IndexOf(methodBody, OpCodeHelper.LdstrValue);
 
         int uriTokenLocation = ldstrLocation + 1;
 
@@ -251,19 +250,19 @@ public static class AvaloniaRuntimeXamlScanner
         while (reader.Next())
         {
             short opCode = reader.OpCode.Value;
-            if (opCode == OpCodes.Ret.Value)
+            if (opCode is OpCodeHelper.RetValue)
             {
                 (str, uri) = (null, null);
                 continue;
             }
 
-            if (opCode == OpCodes.Ldstr.Value)
+            if (opCode is OpCodeHelper.LdstrValue)
             {
                 str = reader.ResolveString(module);
                 continue;
             }
 
-            if (opCode != OpCodes.Call.Value && opCode != OpCodes.Newobj.Value)
+            if (opCode is not (OpCodeHelper.CallValue or OpCodeHelper.NewobjValue))
                 continue;
 
             MethodBase method = reader.ResolveMethod(module);
