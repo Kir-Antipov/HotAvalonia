@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 
 namespace HotAvalonia.Helpers;
@@ -14,7 +15,7 @@ internal static class UriHelper
     /// <param name="uri">The URI to resolve.</param>
     /// <returns>The combined path.</returns>
     public static string ResolvePathFromUri(string root, Uri uri)
-        => Path.Combine(root, uri.AbsolutePath.Substring(1));
+        => Path.Combine(root, GetSafeUriAbsolutePath(uri).Substring(1));
 
     /// <summary>
     /// Combines a root path with a URI string to form a complete path.
@@ -32,7 +33,7 @@ internal static class UriHelper
     /// <param name="path">The path to resolve.</param>
     /// <returns>The resolved host path.</returns>
     public static string ResolveHostPath(Uri uri, string path)
-        => ResolveHostPathFromUriPath(uri.AbsolutePath, path);
+        => ResolveHostPathFromUriPath(GetSafeUriAbsolutePath(uri), path);
 
     /// <summary>
     /// Resolves a host path using a given URI string and path.
@@ -52,7 +53,7 @@ internal static class UriHelper
     private static string ResolveHostPathFromUriPath(string uriPath, string path)
     {
         ReadOnlySpan<char> uriPathSpan = uriPath.AsSpan();
-        ReadOnlySpan<char> pathSpan = new Uri(path).AbsolutePath.AsSpan();
+        ReadOnlySpan<char> pathSpan = GetSafeUriAbsolutePath(path).AsSpan();
 
         if (uriPath.EndsWith("/"))
             uriPathSpan = uriPathSpan.Slice(0, uriPathSpan.Length - 1);
@@ -88,7 +89,7 @@ internal static class UriHelper
         int firstSegmentIndex = uri.IndexOf('/', protocolIndex is -1 ? 0 : (protocolIndex + Uri.SchemeDelimiter.Length));
         string uriPath = firstSegmentIndex is -1 ? uri : uri.Substring(firstSegmentIndex);
 
-        return uriPath;
+        return WebUtility.UrlDecode(uriPath);
     }
 
     /// <summary>
@@ -118,4 +119,24 @@ internal static class UriHelper
 
         return safeUri.ToString();
     }
+
+    /// <summary>
+    /// Returns the absolute path component of a <see cref="Uri"/> while ensuring that any encoded characters are properly decoded.
+    /// </summary>
+    /// <param name="uri">The <see cref="Uri"/> for which the absolute path should be decoded.</param>
+    /// <returns>
+    /// A string representing the decoded absolute path of the provided <paramref name="uri"/>.
+    /// </returns>
+    private static string GetSafeUriAbsolutePath(Uri uri)
+        => WebUtility.UrlDecode(uri.AbsolutePath);
+
+    /// <summary>
+    /// Returns the absolute path component of a <see cref="Uri"/> while ensuring that any encoded characters are properly decoded.
+    /// </summary>
+    /// <param name="uri">The <see cref="Uri"/> for which the absolute path should be decoded.</param>
+    /// <returns>
+    /// A string representing the decoded absolute path of the provided <paramref name="uri"/>.
+    /// </returns>
+    private static string GetSafeUriAbsolutePath(string uri)
+        => WebUtility.UrlDecode(new Uri(uri).AbsolutePath);
 }
