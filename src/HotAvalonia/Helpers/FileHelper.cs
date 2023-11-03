@@ -30,7 +30,7 @@ internal static class FileHelper
     {
         Debug.Assert(File.Exists(path));
 
-        long startTime = Stopwatch.GetTimestamp();
+        long startTime = StopwatchHelper.GetTimestamp();
 
         if (timeout == TimeSpan.Zero)
             timeout = TimeSpan.FromMilliseconds(DefaultTimeout);
@@ -50,8 +50,7 @@ internal static class FileHelper
             }
             catch (IOException)
             {
-                TimeSpan elapsedTime = TimeSpan.FromTicks(Stopwatch.GetTimestamp() - startTime);
-                if (elapsedTime > timeout)
+                if (StopwatchHelper.GetElapsedTime(startTime) > timeout)
                     throw;
             }
         }

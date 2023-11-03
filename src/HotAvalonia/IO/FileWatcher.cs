@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using HotAvalonia.Helpers;
 
 namespace HotAvalonia.IO;
@@ -249,7 +248,7 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="args">The event arguments to be buffered.</param>
     private void BufferEvent(FileSystemEventArgs args)
     {
-        long currentTimestamp = Stopwatch.GetTimestamp();
+        long currentTimestamp = StopwatchHelper.GetTimestamp();
 
         _eventBuffer.Add((args, currentTimestamp));
     }
@@ -259,9 +258,9 @@ internal sealed class FileWatcher : IDisposable
     /// </summary>
     private void CleanupEventBuffer()
     {
-        long currentTimestamp = Stopwatch.GetTimestamp();
+        long currentTimestamp = StopwatchHelper.GetTimestamp();
 
-        _eventBuffer.RemoveAll(x => TimeSpan.FromTicks(currentTimestamp - x.Timestamp).TotalMilliseconds > EventBufferLifetime);
+        _eventBuffer.RemoveAll(x => StopwatchHelper.GetElapsedTime(x.Timestamp, currentTimestamp).TotalMilliseconds > EventBufferLifetime);
     }
 
     /// <summary>
