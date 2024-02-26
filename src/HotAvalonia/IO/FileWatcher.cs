@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HotAvalonia.Helpers;
 
 namespace HotAvalonia.IO;
@@ -46,13 +47,19 @@ internal sealed class FileWatcher : IDisposable
     private FileSystemWatcher? _systemWatcher;
 
     /// <summary>
+    /// List of extensions to watch (including dot)
+    /// </summary>
+    private IEnumerable<string>? _extensionsToWatch;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="FileWatcher"/> class.
     /// </summary>
     /// <param name="rootPath">The root directory to be watched.</param>
-    public FileWatcher(string rootPath)
+    public FileWatcher(string rootPath, IEnumerable<string>? extensionsToWatch = null)
     {
         _ = rootPath ?? throw new ArgumentNullException(nameof(rootPath));
         _ = Directory.Exists(rootPath) ? rootPath : throw new DirectoryNotFoundException(rootPath);
+        _extensionsToWatch = extensionsToWatch;
 
         DirectoryName = rootPath;
         _systemWatcher = CreateFileSystemWatcher(rootPath);
@@ -67,8 +74,8 @@ internal sealed class FileWatcher : IDisposable
     /// </summary>
     /// <param name="rootPath">The root directory to be watched.</param>
     /// <param name="fileNames">The initial list of file names to be tracked.</param>
-    public FileWatcher(string rootPath, IEnumerable<string> fileNames)
-        : this(rootPath)
+    public FileWatcher(string rootPath, IEnumerable<string> fileNames, IEnumerable<string> extensionsToWatch)
+        : this(rootPath, extensionsToWatch)
     {
         _ = fileNames ?? throw new ArgumentNullException(nameof(fileNames));
 
@@ -162,9 +169,23 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnCreatedOrDeleted(object sender, FileSystemEventArgs args)
     {
+        var fullPath = args.FullPath;
+        if (!IsFileIncluded(fullPath))
+        {
+            return;
+        }
+        if (args.ChangeType == WatcherChangeTypes.Created)
+        {
+            LoggingHelper.Logger?.Log(this, "File created: {0}", GetRelativePath(fullPath));
+        }
+        if (args.ChangeType == WatcherChangeTypes.Deleted)
+        {
+            LoggingHelper.Logger?.Log(this, "File deleted: {0}", GetRelativePath(fullPath));
+        }
+
         StringComparer fileNameComparer = FileHelper.FileNameComparer;
         WatcherChangeTypes oppositeChangeType = args.ChangeType is WatcherChangeTypes.Created ? WatcherChangeTypes.Deleted : WatcherChangeTypes.Created;
-        string fileName = Path.GetFileName(args.FullPath);
+        string fileName = Path.GetFileName(fullPath);
         string? newFullPath = null;
         string? oldFullPath = null;
 
@@ -192,8 +213,14 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnChanged(object sender, FileSystemEventArgs args)
     {
-        string path = Path.GetFullPath(args.FullPath);
+        var fullPath = args.FullPath;
+        if(!IsFileIncluded(fullPath))
+        {
+            return;
+        }
+        LoggingHelper.Logger?.Log(this, "File changed: {0}, change type: {1}", GetRelativePath(fullPath), args.ChangeType);
 
+        string path = Path.GetFullPath(fullPath);
         lock (_lock)
         {
             if (!IsWatchingFile(path) || !TryUpdateLastWriteTime(path))
@@ -218,6 +245,12 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="oldFullPath">The old full path of the file.</param>
     private void OnMoved(string newFullPath, string oldFullPath)
     {
+        if (!IsFileIncluded(newFullPath) || !IsFileIncluded(oldFullPath))
+        {
+            return;
+        }
+        LoggingHelper.Logger?.Log(this, "File moved: {0} -> {1}", GetRelativePath(oldFullPath), GetRelativePath(newFullPath));
+
         newFullPath = Path.GetFullPath(newFullPath);
         oldFullPath = Path.GetFullPath(oldFullPath);
 
@@ -313,7 +346,7 @@ internal sealed class FileWatcher : IDisposable
         {
             EnableRaisingEvents = false,
             IncludeSubdirectories = true,
-            NotifyFilter = NotifyFilters.LastWrite
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.CreationTime
                 | NotifyFilters.DirectoryName
                 | NotifyFilters.FileName,
         };
@@ -325,6 +358,24 @@ internal sealed class FileWatcher : IDisposable
         watcher.EnableRaisingEvents = true;
 
         return watcher;
+    }
+
+    private string GetRelativePath(string path)
+    {
+        if (path.StartsWith(DirectoryName, StringComparison.OrdinalIgnoreCase))
+        {
+            return path.Substring(DirectoryName.Length);
+        }
+        return path;
+    }
+
+    private bool IsFileIncluded(string fileName)
+    {
+        if (_extensionsToWatch == null)
+        {
+            return true;
+        }
+        return _extensionsToWatch.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
