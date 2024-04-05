@@ -10,11 +10,6 @@ namespace HotAvalonia;
 public sealed class AvaloniaHotReloadContext : IDisposable
 {
     /// <summary>
-    /// File extensions to watch
-    /// </summary>
-    private static readonly IEnumerable<string> ExtensionsToWatch = [".axaml"];
-
-    /// <summary>
     /// The Avalonia control managers, mapped by their respective file paths.
     /// </summary>
     private readonly Dictionary<string, AvaloniaControlManager> _controls;
@@ -44,7 +39,7 @@ public sealed class AvaloniaHotReloadContext : IDisposable
             .Select(x => ResolveControlManager(x, rootPath))
             .ToDictionary(static x => x.FileName, FileHelper.FileNameComparer);
 
-        _watcher = new(rootPath, _controls.Keys, ExtensionsToWatch);
+        _watcher = new(rootPath, _controls.Keys);
         _watcher.Changed += OnChanged;
         _watcher.Moved += OnMoved;
         _watcher.Error += OnError;
