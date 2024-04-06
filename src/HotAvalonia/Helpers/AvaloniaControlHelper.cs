@@ -175,8 +175,8 @@ internal static class AvaloniaControlHelper
     /// <returns>The XAML markup with static resources replaced by their dynamic counterparts.</returns>
     private static string MakeStaticComponentsDynamic(string xaml)
     {
-        const string staticResourceName = "{StaticResource ";
-        const string dynamicResourceName = "{DynamicResource ";
+        const string staticResourceName = "\"{StaticResource ";
+        const string dynamicResourceName = "\"{DynamicResource ";
 
         return xaml.Replace(staticResourceName, dynamicResourceName);
     }
