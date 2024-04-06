@@ -140,6 +140,8 @@ While HotAvalonia is a powerful tool for enhancing your Avalonia development wor
 
  5. **`dotnet watch`:** In rare edge cases, when using HotAvalonia in conjunction with `dotnet watch`, Avalonia may not be able to discover some newly added class members *(such as event handlers in views)*. However, your hot reload experience should generally be quite smooth when editing view models.
 
+ 6. **Mobile Development:** Unlike in a local development environment, where your application and project files share the same filesystem, in an emulator, your application is running on what effectively is a remote system. To enable hot reloading there, your project must be accessible by the emulator. This can be achieved by mounting the directory you are working with as a remote filesystem on the emulated device. With this setup, hot reload on emulators should work, but there may be additional challenges yet to be discovered. Feel free to open an issue if you've stumbled upon any!
+
 ----
 
 ## License
