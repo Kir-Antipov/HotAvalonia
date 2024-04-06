@@ -1,6 +1,8 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:converters="clr-namespace:HotReloadDemo.Converters;assembly=HotReloadDemo">
 
   <x:String x:Key="AddItemWatermark">Enter your todo item</x:String>
+  <converters:TitleCaseConverter x:Key="TitleCaseConverter"/>
 
 </ResourceDictionary>

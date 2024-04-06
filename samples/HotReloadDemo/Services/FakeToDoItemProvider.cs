@@ -6,8 +6,8 @@ public sealed class FakeToDoItemProvider : IToDoItemProvider
 {
     public IEnumerable<ToDoItem> GetItems() => new[]
     {
-        new ToDoItem { Description = "Walk the dog" },
-        new ToDoItem { Description = "Buy some milk" },
-        new ToDoItem { Description = "Learn Avalonia", IsChecked = true },
+        new ToDoItem { Description = "walk the dog" },
+        new ToDoItem { Description = "buy some milk" },
+        new ToDoItem { Description = "learn Avalonia", IsChecked = true },
     };
 }
