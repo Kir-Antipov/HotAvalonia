@@ -215,6 +215,16 @@ internal sealed class FileWatcher : IDisposable
     /// <returns><c>true</c> if the event is a duplicate; otherwise, <c>false</c>.</returns>
     private bool IsDuplicateEvent(FileSystemEventArgs args)
     {
+        // Currently, we only care about filtering duplicate change events:
+        // - They trigger most of the unnecessary work.
+        // - They are the most straightforward ones to detect.
+        //
+        // Since duplicates of other events don't cause as much harm,
+        // let's just skip them for now and return to this matter later,
+        // if it becomes a problem.
+        if (args.ChangeType is not WatcherChangeTypes.Changed)
+            return false;
+
         WatcherChangeTypes type = args.ChangeType;
         string path = Path.GetFullPath(args.FullPath);
         StringComparer fileNameComparer = FileHelper.FileNameComparer;
