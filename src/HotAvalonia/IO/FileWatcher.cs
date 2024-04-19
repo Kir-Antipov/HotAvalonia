@@ -134,7 +134,7 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnCreatedOrDeleted(object sender, FileSystemEventArgs args)
-        => OnFileSystemEvent(args, args.FullPath);
+        => OnFileSystemEvent(args);
 
     /// <summary>
     /// Handles the event of a file change.
@@ -142,7 +142,7 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnChanged(object sender, FileSystemEventArgs args)
-        => OnFileSystemEvent(args, args.FullPath, () => Changed?.Invoke(this, args));
+        => OnFileSystemEvent(args, () => Changed?.Invoke(this, args));
 
     /// <summary>
     /// Handles the event when a file is moved.
@@ -150,7 +150,7 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">Event arguments containing the old and new name of the file.</param>
     private void OnMoved(object sender, MovedEventArgs args)
-        => OnFileSystemEvent(args, args.OldFullPath, () => Moved?.Invoke(this, args), () =>
+        => OnFileSystemEvent(args, () => Moved?.Invoke(this, args), () =>
         {
             _files.Remove(Path.GetFullPath(args.OldFullPath));
             _files.Add(Path.GetFullPath(args.FullPath));
@@ -179,11 +179,13 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="path">The path of the file associated with the event.</param>
     /// <param name="handler">A handler for the event.</param>
     /// <param name="sync">An action to synchronize changes after processing the event.</param>
-    private void OnFileSystemEvent(FileSystemEventArgs args, string path, Action? handler = null, Action? sync = null)
+    private void OnFileSystemEvent(FileSystemEventArgs args, Action? handler = null, Action? sync = null)
     {
         lock (_lock)
         {
-            if (!IsWatchingFile(path))
+            bool isFullPathWatched = IsWatchingFile(args.FullPath);
+            bool isOldFullPathWatched = args is MovedEventArgs moved && IsWatchingFile(moved.OldFullPath);
+            if (!isFullPathWatched && !isOldFullPathWatched)
             {
                 _eventCache.Add(args);
                 return;
@@ -191,13 +193,16 @@ internal sealed class FileWatcher : IDisposable
 
             if (IsDuplicateEvent(args))
                 return;
-
-            _eventCache.Add(args);
-            sync?.Invoke();
         }
 
         if (!TryProcessComplexEvent(args))
             handler?.Invoke();
+
+        lock (_lock)
+        {
+            _eventCache.Add(args);
+            sync?.Invoke();
+        }
     }
 
     /// <summary>
