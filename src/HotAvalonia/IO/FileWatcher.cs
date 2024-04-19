@@ -243,7 +243,9 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="args">The event arguments containing information about the filesystem operation.</param>
     /// <returns><c>true</c> if a complex event (change or move operation) was successfully processed; otherwise, <c>false</c>.</returns>
     private bool TryProcessComplexEvent(FileSystemEventArgs args)
-        => TryProcessComplexChange(args) || TryProcessComplexMove(args);
+        => TryProcessComplexChange_NTFS(args)
+        || TryProcessComplexChange_ReFS(args)
+        || TryProcessComplexMove(args);
 
     /// <summary>
     /// Tries to process a complex move operation that involves copying a file to a new destination and then deleting the original.
@@ -293,7 +295,7 @@ internal sealed class FileWatcher : IDisposable
     /// Tries to process a complex file modification operation that is commonly performed by some IDEs, such as Visual Studio.
     /// </summary>
     /// <remarks>
-    /// Such operation involves several steps:
+    /// Such operation involves several steps on NTFS drives:
     /// <list type="number">
     /// <item>
     /// <description>A copy of the original file is created (e.g., `mgwudjxu.mzo-`). This file will temporarily store applied changes.</description>
@@ -315,7 +317,7 @@ internal sealed class FileWatcher : IDisposable
     /// </remarks>
     /// <param name="args">The event arguments containing information about the filesystem operation.</param>
     /// <returns><c>true</c> if a complex change operation was successfully processed; otherwise, <c>false</c>.</returns>
-    private bool TryProcessComplexChange(FileSystemEventArgs args)
+    private bool TryProcessComplexChange_NTFS(FileSystemEventArgs args)
     {
         if (args.ChangeType is not WatcherChangeTypes.Deleted)
             return false;
@@ -342,6 +344,58 @@ internal sealed class FileWatcher : IDisposable
 
         Moved?.Invoke(this, new(previousPath, path));
         Changed?.Invoke(this, new(WatcherChangeTypes.Changed, Path.GetDirectoryName(previousPath), Path.GetFileName(previousPath)));
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to process a complex file modification operation that is commonly performed by some IDEs, such as Visual Studio.
+    /// </summary>
+    /// <remarks>
+    /// Such operation involves several steps on ReFS drives:
+    /// <list type="number">
+    /// <item>
+    /// <description>An edited copy of the original file is created (e.g., `mgwudjxu.mzo-`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The original file is deleted and its contents are written to a temporary file (e.g., `MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The edited copy is moved back to the original file's location (`mgwudjxu.mzo-` -> `MainWindow.axaml`).</description>
+    /// </item>
+    /// <item>
+    /// <description>If no errors occurred during the process, the original file is deleted (`MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// </list>
+    /// In contrast to responding to each individual event, this method cumulatively processes them and emits a single "changed" event.
+    /// </remarks>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if a complex change operation was successfully processed; otherwise, <c>false</c>.</returns>
+    private bool TryProcessComplexChange_ReFS(FileSystemEventArgs args)
+    {
+        if (args is not MovedEventArgs movedArgs)
+            return false;
+
+        // We only want to catch an event when an untracked file
+        // takes place of the one we're actually watching.
+        if (!IsWatchingFile(movedArgs.FullPath) || IsWatchingFile(movedArgs.OldFullPath))
+            return false;
+
+        string path = Path.GetFullPath(args.FullPath);
+        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        bool wasDeleted;
+        lock (_lock)
+        {
+            wasDeleted = _eventCache
+                .Any(x => x.ChangeType is WatcherChangeTypes.Deleted
+                    && fileNameComparer.Equals(Path.GetFullPath(x.FullPath), path));
+        }
+
+        if (!wasDeleted || !File.Exists(path))
+            return false;
+
+        // `FileWatcher` currently does not propagate `Deleted` events to its subscribers.
+        // However, if this ever changes, we will need to create a synthetic `Created` event here as well.
+        Changed?.Invoke(this, new(WatcherChangeTypes.Changed, Path.GetDirectoryName(path), Path.GetFileName(path)));
         return true;
     }
 
