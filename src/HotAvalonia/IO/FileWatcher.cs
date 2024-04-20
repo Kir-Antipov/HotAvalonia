@@ -1,3 +1,4 @@
+using HotAvalonia.Collections;
 using HotAvalonia.Helpers;
 
 namespace HotAvalonia.IO;
@@ -8,32 +9,14 @@ namespace HotAvalonia.IO;
 internal sealed class FileWatcher : IDisposable
 {
     /// <summary>
-    /// The minimum time difference required to consider a write operation as unique.
-    /// </summary>
-    /// <remarks>
-    /// https://en.wikipedia.org/wiki/Mental_chronometry#Measurement_and_mathematical_descriptions
-    /// </remarks>
-    private const double MinWriteTimeDifference = 150;
-
-    /// <summary>
-    /// The time duration for which create and delete events are buffered before being processed.
-    /// </summary>
-    private const double EventBufferLifetime = 100;
-
-    /// <summary>
     /// The set of tracked file paths.
     /// </summary>
     private readonly HashSet<string> _files;
 
     /// <summary>
-    /// The last write times for the tracked files.
+    /// The cache of filesystem events.
     /// </summary>
-    private readonly Dictionary<string, DateTime> _lastWriteTimes;
-
-    /// <summary>
-    /// The list of buffered create and delete events awaiting processing.
-    /// </summary>
-    private readonly List<(FileSystemEventArgs Event, long Timestamp)> _eventBuffer;
+    private readonly MemoryCache<FileSystemEventArgs> _eventCache;
 
     /// <summary>
     /// The object used for locking in thread-safe operations.
@@ -51,14 +34,17 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="rootPath">The root directory to be watched.</param>
     public FileWatcher(string rootPath)
     {
+        // The minimum time difference required to consider a write operation as unique.
+        // See: https://en.wikipedia.org/wiki/Mental_chronometry#Measurement_and_mathematical_descriptions
+        const double MinWriteTimeDifference = 150;
+
         _ = rootPath ?? throw new ArgumentNullException(nameof(rootPath));
         _ = Directory.Exists(rootPath) ? rootPath : throw new DirectoryNotFoundException(rootPath);
 
         DirectoryName = rootPath;
         _systemWatcher = CreateFileSystemWatcher(rootPath);
         _files = new(FileHelper.FileNameComparer);
-        _lastWriteTimes = new(FileHelper.FileNameComparer);
-        _eventBuffer = new();
+        _eventCache = new(TimeSpan.FromMilliseconds(MinWriteTimeDifference));
         _lock = new();
     }
 
@@ -114,19 +100,6 @@ internal sealed class FileWatcher : IDisposable
     }
 
     /// <summary>
-    /// The sequence of buffered create and delete events awaiting processing.
-    /// </summary>
-    private IEnumerable<FileSystemEventArgs> BufferedEvents
-    {
-        get
-        {
-            CleanupEventBuffer();
-
-            return _eventBuffer.Select(static x => x.Event);
-        }
-    }
-
-    /// <summary>
     /// Starts watching a specified file.
     /// </summary>
     /// <param name="fileName">The name of the file to be watched.</param>
@@ -161,47 +134,27 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnCreatedOrDeleted(object sender, FileSystemEventArgs args)
-    {
-        StringComparer fileNameComparer = FileHelper.FileNameComparer;
-        WatcherChangeTypes oppositeChangeType = args.ChangeType is WatcherChangeTypes.Created ? WatcherChangeTypes.Deleted : WatcherChangeTypes.Created;
-        string fileName = Path.GetFileName(args.FullPath);
-        string? newFullPath = null;
-        string? oldFullPath = null;
-
-        lock (_lock)
-        {
-            FileSystemEventArgs? bufferedArgs = BufferedEvents.FirstOrDefault(x => x.ChangeType == oppositeChangeType && fileNameComparer.Equals(Path.GetFileName(x.FullPath), fileName));
-            if (bufferedArgs is null)
-            {
-                BufferEvent(args);
-                return;
-            }
-
-            (newFullPath, oldFullPath) = args.ChangeType is WatcherChangeTypes.Created
-                ? (args.FullPath, bufferedArgs.FullPath)
-                : (bufferedArgs.FullPath, args.FullPath);
-        }
-
-        OnMoved(newFullPath, oldFullPath);
-    }
+        => OnFileSystemEvent(args);
 
     /// <summary>
-    /// Processes the event of a file change..
+    /// Handles the event of a file change.
     /// </summary>
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">The event arguments containing information about the file change.</param>
     private void OnChanged(object sender, FileSystemEventArgs args)
-    {
-        string path = Path.GetFullPath(args.FullPath);
+        => OnFileSystemEvent(args, () => Changed?.Invoke(this, args));
 
-        lock (_lock)
+    /// <summary>
+    /// Handles the event when a file is moved.
+    /// </summary>
+    /// <param name="sender">The source of the event.</param>
+    /// <param name="args">Event arguments containing the old and new name of the file.</param>
+    private void OnMoved(object sender, MovedEventArgs args)
+        => OnFileSystemEvent(args, () => Moved?.Invoke(this, args), () =>
         {
-            if (!IsWatchingFile(path) || !TryUpdateLastWriteTime(path))
-                return;
-        }
-
-        Changed?.Invoke(this, args);
-    }
+            _files.Remove(Path.GetFullPath(args.OldFullPath));
+            _files.Add(Path.GetFullPath(args.FullPath));
+        });
 
     /// <summary>
     /// Handles the event when a file is renamed.
@@ -209,30 +162,7 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="sender">The source of the event.</param>
     /// <param name="args">Event arguments containing the old and new name of the file.</param>
     private void OnRenamed(object sender, RenamedEventArgs args)
-        => OnMoved(args.FullPath, args.OldFullPath);
-
-    /// <summary>
-    /// Processes the movement of a file and updates the internal list of files being watched.
-    /// </summary>
-    /// <param name="newFullPath">The new full path of the file.</param>
-    /// <param name="oldFullPath">The old full path of the file.</param>
-    private void OnMoved(string newFullPath, string oldFullPath)
-    {
-        newFullPath = Path.GetFullPath(newFullPath);
-        oldFullPath = Path.GetFullPath(oldFullPath);
-
-        lock (_lock)
-        {
-            if (!IsWatchingFile(oldFullPath) || !TryUpdateLastWriteTime(newFullPath))
-                return;
-
-            _files.Remove(oldFullPath);
-            _lastWriteTimes.Remove(oldFullPath);
-            _files.Add(newFullPath);
-        }
-
-        Moved?.Invoke(this, new(newFullPath, oldFullPath));
-    }
+        => OnMoved(sender, new(args.FullPath, args.OldFullPath));
 
     /// <summary>
     /// Handles any error that occurs during file watching.
@@ -243,46 +173,36 @@ internal sealed class FileWatcher : IDisposable
         => Error?.Invoke(this, args);
 
     /// <summary>
-    /// Adds an event to the internal buffer for further processing.
+    /// Handles a filesystem event, performing necessary actions based on the event type.
     /// </summary>
-    /// <param name="args">The event arguments to be buffered.</param>
-    private void BufferEvent(FileSystemEventArgs args)
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <param name="path">The path of the file associated with the event.</param>
+    /// <param name="handler">A handler for the event.</param>
+    /// <param name="sync">An action to synchronize changes after processing the event.</param>
+    private void OnFileSystemEvent(FileSystemEventArgs args, Action? handler = null, Action? sync = null)
     {
-        long currentTimestamp = StopwatchHelper.GetTimestamp();
+        lock (_lock)
+        {
+            bool isFullPathWatched = IsWatchingFile(args.FullPath);
+            bool isOldFullPathWatched = args is MovedEventArgs moved && IsWatchingFile(moved.OldFullPath);
+            if (!isFullPathWatched && !isOldFullPathWatched)
+            {
+                _eventCache.Add(args);
+                return;
+            }
 
-        _eventBuffer.Add((args, currentTimestamp));
-    }
+            if (IsDuplicateEvent(args))
+                return;
+        }
 
-    /// <summary>
-    /// Removes stale events from the internal buffer.
-    /// </summary>
-    private void CleanupEventBuffer()
-    {
-        long currentTimestamp = StopwatchHelper.GetTimestamp();
+        if (!TryProcessComplexEvent(args))
+            handler?.Invoke();
 
-        _eventBuffer.RemoveAll(x => StopwatchHelper.GetElapsedTime(x.Timestamp, currentTimestamp).TotalMilliseconds > EventBufferLifetime);
-    }
-
-    /// <summary>
-    /// Attempts to update the last write time for the specified file and validates if it should trigger further actions.
-    /// </summary>
-    /// <param name="fileName">The name of the file to update.</param>
-    /// <returns>
-    /// <c>true</c> if the last write time was successfully updated and meets the criteria for an action;
-    /// otherwise, <c>false</c>.
-    /// </returns>
-    private bool TryUpdateLastWriteTime(string fileName)
-    {
-        DateTime newWriteTime = string.IsNullOrEmpty(fileName) ? default : File.GetLastWriteTime(fileName);
-
-        if (!_lastWriteTimes.TryGetValue(fileName, out DateTime lastWriteTime))
-            lastWriteTime = default;
-
-        if (newWriteTime == lastWriteTime)
-            return false;
-
-        _lastWriteTimes[fileName] = newWriteTime;
-        return (newWriteTime - lastWriteTime).TotalMilliseconds >= MinWriteTimeDifference;
+        lock (_lock)
+        {
+            _eventCache.Add(args);
+            sync?.Invoke();
+        }
     }
 
     /// <summary>
@@ -291,7 +211,193 @@ internal sealed class FileWatcher : IDisposable
     /// <param name="fileName">The name of the file to check.</param>
     /// <returns><c>true</c> if the file is being watched; otherwise, <c>false</c>.</returns>
     private bool IsWatchingFile(string fileName)
-        => _files.Contains(fileName);
+        => _files.Contains(Path.GetFullPath(fileName));
+
+    /// <summary>
+    /// Checks if the given filesystem event is a duplicate of any previously cached event.
+    /// </summary>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if the event is a duplicate; otherwise, <c>false</c>.</returns>
+    private bool IsDuplicateEvent(FileSystemEventArgs args)
+    {
+        // Currently, we only care about filtering duplicate change events:
+        // - They trigger most of the unnecessary work.
+        // - They are the most straightforward ones to detect.
+        //
+        // Since duplicates of other events don't cause as much harm,
+        // let's just skip them for now and return to this matter later,
+        // if it becomes a problem.
+        if (args.ChangeType is not WatcherChangeTypes.Changed)
+            return false;
+
+        WatcherChangeTypes type = args.ChangeType;
+        string path = Path.GetFullPath(args.FullPath);
+        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+
+        return _eventCache.Any(x => x.ChangeType == type && fileNameComparer.Equals(Path.GetFullPath(x.FullPath), path));
+    }
+
+    /// <summary>
+    /// Tries to process complex filesystem events that combine multiple atomic operations.
+    /// </summary>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if a complex event (change or move operation) was successfully processed; otherwise, <c>false</c>.</returns>
+    private bool TryProcessComplexEvent(FileSystemEventArgs args)
+        => TryProcessComplexChange_NTFS(args)
+        || TryProcessComplexChange_ReFS(args)
+        || TryProcessComplexMove(args);
+
+    /// <summary>
+    /// Tries to process a complex move operation that involves copying a file to a new destination and then deleting the original.
+    /// </summary>
+    /// <remarks>
+    /// Such operation involves the following steps:
+    /// <list type="number">
+    /// <item>
+    /// <description>A file is created at a new location, effectively copying the original file (e.g., `Source.axaml` -> `Target.axaml`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The original file is deleted (e.g., `Source.axaml` is deleted).</description>
+    /// </item>
+    /// </list>
+    /// Instead of emitting a separate 'created' event for the new location, and a 'deleted' event for the original location,
+    /// this method consolidates them and emits a single 'moved' event.
+    /// </remarks>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if a complex move operation was successfully processed; otherwise, <c>false</c>.</returns>
+    private bool TryProcessComplexMove(FileSystemEventArgs args)
+    {
+        if (args.ChangeType is not (WatcherChangeTypes.Created or WatcherChangeTypes.Deleted))
+            return false;
+
+        WatcherChangeTypes oppositeChangeType = args.ChangeType is WatcherChangeTypes.Created ? WatcherChangeTypes.Deleted : WatcherChangeTypes.Created;
+        string fileName = Path.GetFileName(args.FullPath);
+        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        string? newFullPath = null;
+        string? oldFullPath = null;
+
+        lock (_lock)
+        {
+            FileSystemEventArgs? oppositeEvent = _eventCache.FirstOrDefault(x => x.ChangeType == oppositeChangeType && fileNameComparer.Equals(Path.GetFileName(x.FullPath), fileName));
+            if (oppositeEvent is null)
+                return false;
+
+            (newFullPath, oldFullPath) = args.ChangeType is WatcherChangeTypes.Created
+                ? (args.FullPath, oppositeEvent.FullPath)
+                : (oppositeEvent.FullPath, args.FullPath);
+        }
+
+        OnMoved(this, new(newFullPath, oldFullPath));
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to process a complex file modification operation that is commonly performed by some IDEs, such as Visual Studio.
+    /// </summary>
+    /// <remarks>
+    /// Such operation involves several steps on NTFS drives:
+    /// <list type="number">
+    /// <item>
+    /// <description>A copy of the original file is created (e.g., `mgwudjxu.mzo-`). This file will temporarily store applied changes.</description>
+    /// </item>
+    /// <item>
+    /// <description>Changes are applied to the copy.</description>
+    /// </item>
+    /// <item>
+    /// <description>The original file is given a temporary and randomly assigned filename (e.g., `MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The edited copy is moved back to the original file's location (`mgwudjxu.mzo-` -> `MainWindow.axaml`).</description>
+    /// </item>
+    /// <item>
+    /// <description>If no errors occurred during the process, the original file is deleted (`MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// </list>
+    /// In contrast to responding to each individual event, this method cumulatively processes them and emits a single "changed" event.
+    /// </remarks>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if a complex change operation was successfully processed; otherwise, <c>false</c>.</returns>
+    private bool TryProcessComplexChange_NTFS(FileSystemEventArgs args)
+    {
+        if (args.ChangeType is not WatcherChangeTypes.Deleted)
+            return false;
+
+        string path = Path.GetFullPath(args.FullPath);
+        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        string? previousPath;
+        lock (_lock)
+        {
+            previousPath = _eventCache
+                .OfType<MovedEventArgs>()
+                .FirstOrDefault(x => fileNameComparer.Equals(Path.GetFullPath(x.FullPath), path))?.OldFullPath;
+        }
+
+        if (!File.Exists(previousPath))
+            return false;
+
+        previousPath = Path.GetFullPath(previousPath);
+        lock (_lock)
+        {
+            _files.Remove(path);
+            _files.Add(previousPath);
+        }
+
+        Moved?.Invoke(this, new(previousPath, path));
+        Changed?.Invoke(this, new(WatcherChangeTypes.Changed, Path.GetDirectoryName(previousPath), Path.GetFileName(previousPath)));
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to process a complex file modification operation that is commonly performed by some IDEs, such as Visual Studio.
+    /// </summary>
+    /// <remarks>
+    /// Such operation involves several steps on ReFS drives:
+    /// <list type="number">
+    /// <item>
+    /// <description>An edited copy of the original file is created (e.g., `mgwudjxu.mzo-`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The original file is deleted and its contents are written to a temporary file (e.g., `MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// <item>
+    /// <description>The edited copy is moved back to the original file's location (`mgwudjxu.mzo-` -> `MainWindow.axaml`).</description>
+    /// </item>
+    /// <item>
+    /// <description>If no errors occurred during the process, the original file is deleted (`MainWindow.axaml-RF44d4e140.TMP`).</description>
+    /// </item>
+    /// </list>
+    /// In contrast to responding to each individual event, this method cumulatively processes them and emits a single "changed" event.
+    /// </remarks>
+    /// <param name="args">The event arguments containing information about the filesystem operation.</param>
+    /// <returns><c>true</c> if a complex change operation was successfully processed; otherwise, <c>false</c>.</returns>
+    private bool TryProcessComplexChange_ReFS(FileSystemEventArgs args)
+    {
+        if (args is not MovedEventArgs movedArgs)
+            return false;
+
+        // We only want to catch an event when an untracked file
+        // takes place of the one we're actually watching.
+        if (!IsWatchingFile(movedArgs.FullPath) || IsWatchingFile(movedArgs.OldFullPath))
+            return false;
+
+        string path = Path.GetFullPath(args.FullPath);
+        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        bool wasDeleted;
+        lock (_lock)
+        {
+            wasDeleted = _eventCache
+                .Any(x => x.ChangeType is WatcherChangeTypes.Deleted
+                    && fileNameComparer.Equals(Path.GetFullPath(x.FullPath), path));
+        }
+
+        if (!wasDeleted || !File.Exists(path))
+            return false;
+
+        // `FileWatcher` currently does not propagate `Deleted` events to its subscribers.
+        // However, if this ever changes, we will need to create a synthetic `Created` event here as well.
+        Changed?.Invoke(this, new(WatcherChangeTypes.Changed, Path.GetDirectoryName(path), Path.GetFileName(path)));
+        return true;
+    }
 
     /// <summary>
     /// Disposes resources used by this file watcher.
