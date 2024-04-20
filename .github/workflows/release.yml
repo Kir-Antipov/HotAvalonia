@@ -20,10 +20,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@main
+        uses: actions/setup-dotnet@v4
 
       - name: Restore dependencies
         run: dotnet restore -tl
