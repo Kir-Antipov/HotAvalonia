@@ -38,8 +38,8 @@ While you could use the `dotnet add` command to accomplish this, I would strongl
 
 <ItemGroup>
   <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="Avalonia.Markup.Xaml.Loader" Version="$(AvaloniaVersion)" />
-  <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="HotAvalonia" Version="1.0.1" />
-  <PackageReference Include="HotAvalonia.Extensions" Version="1.0.1" PrivateAssets="All" />
+  <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="HotAvalonia" Version="1.1.0" />
+  <PackageReference Include="HotAvalonia.Extensions" Version="1.1.0" PrivateAssets="All" />
 </ItemGroup>
 ```
 
