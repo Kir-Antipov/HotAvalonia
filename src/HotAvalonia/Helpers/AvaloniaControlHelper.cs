@@ -12,6 +12,20 @@ namespace HotAvalonia.Helpers;
 internal static class AvaloniaControlHelper
 {
     /// <summary>
+    /// The `_stylesApplied` field of the <see cref="StyledElement"/> class.
+    /// </summary>
+    private static readonly FieldInfo? s_stylesAppliedField;
+
+    /// <summary>
+    /// Initializes static members of the <see cref="AvaloniaControlHelper"/> class.
+    /// </summary>
+    static AvaloniaControlHelper()
+    {
+        FieldInfo? stylesAppliedField = typeof(StyledElement).GetField("_stylesApplied", BindingFlags.NonPublic | BindingFlags.Instance);
+        s_stylesAppliedField = stylesAppliedField?.FieldType == typeof(bool) ? stylesAppliedField : null;
+    }
+
+    /// <summary>
     /// Loads an Avalonia control from XAML markup and initializes it.
     /// </summary>
     /// <param name="xaml">The XAML markup to load the control from.</param>
@@ -154,6 +168,9 @@ internal static class AvaloniaControlHelper
     {
         if (control is null)
             return;
+
+        if (control is StyledElement)
+            s_stylesAppliedField?.SetValue(control, false);
 
         if (control is IDictionary<object, object> dictionaryControl)
             dictionaryControl.Clear();
