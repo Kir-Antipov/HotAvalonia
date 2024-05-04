@@ -9,31 +9,6 @@ namespace HotAvalonia.Helpers;
 internal static class OpCodeHelper
 {
     /// <summary>
-    /// The <see cref="OpCode.Value"/> for the 'call' instruction.
-    /// </summary>
-    internal const short CallValue = 0x28;
-
-    /// <summary>
-    /// The <see cref="OpCode.Value"/> for the 'ret' instruction.
-    /// </summary>
-    internal const short RetValue = 0x2A;
-
-    /// <summary>
-    /// The <see cref="OpCode.Value"/> for the 'switch' instruction.
-    /// </summary>
-    internal const short SwitchValue = 0x45;
-
-    /// <summary>
-    /// The <see cref="OpCode.Value"/> for the 'ldstr' instruction.
-    /// </summary>
-    internal const short LdstrValue = 0x72;
-
-    /// <summary>
-    /// The <see cref="OpCode.Value"/> for the 'newobj' instruction.
-    /// </summary>
-    internal const short NewobjValue = 0x73;
-
-    /// <summary>
     /// The flag indicating that the <see cref="OpCode"/> is represented by 2 bytes.
     /// </summary>
     private const int Int16OpCodeFlag = 0xFE00;

@@ -16,6 +16,11 @@ namespace HotAvalonia.Reflection;
 internal struct MethodBodyReader
 {
     /// <summary>
+    /// The <see cref="OpCode.Value"/> for the 'switch' instruction.
+    /// </summary>
+    private const short SwitchOpCode = 0x45;
+
+    /// <summary>
     /// The byte sequence that constitutes the method body.
     /// </summary>
     private readonly ReadOnlyMemory<byte> _methodBody;
@@ -68,7 +73,7 @@ internal struct MethodBodyReader
         {
             int size = _opCode.Size;
             if (size is 0)
-                return Array.Empty<byte>();
+                return default;
 
             return _methodBody.Slice(_position + size, _opCode.OperandType.GetOperandSize()).Span;
         }
@@ -81,8 +86,8 @@ internal struct MethodBodyReader
     {
         get
         {
-            if (_opCode.Value is not OpCodeHelper.SwitchValue)
-                return Array.Empty<int>();
+            if (_opCode.Value is not SwitchOpCode)
+                return default;
 
             int start = _position + sizeof(byte) + sizeof(int);
             int byteLength = _bytesConsumed - start;
@@ -110,7 +115,7 @@ internal struct MethodBodyReader
         if (nextBytesConsumed > methodBody.Length)
             return false;
 
-        if (newOpCode.Value is OpCodeHelper.SwitchValue)
+        if (newOpCode.Value is SwitchOpCode)
         {
             int n = BitConverter.ToInt32(methodBody.Slice(operandStart));
             nextBytesConsumed += n * sizeof(int);
