@@ -4,11 +4,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="450"
+             x:Name="AddItemUserControl"
              x:Class="HotReloadDemo.Views.AddItemView"
              x:DataType="vm:AddItemViewModel">
 
   <DockPanel>
     <Button Classes="Cancel"
+            x:Name="CancelButton"
             DockPanel.Dock="Bottom"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Center"
@@ -16,13 +18,14 @@
       Cancel
     </Button>
     <Button Classes="Ok"
+            x:Name="OkButton"
             DockPanel.Dock="Bottom"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Center"
             Command="{Binding OkCommand}">
       Ok
     </Button>
-    <TextBox AcceptsReturn="true" Text="{Binding Description}" Watermark="{StaticResource AddItemWatermark}"/>
+    <TextBox x:Name="DescriptionTextBox" AcceptsReturn="true" Text="{Binding Description}" Watermark="{StaticResource AddItemWatermark}"/>
   </DockPanel>
 
 </UserControl>
