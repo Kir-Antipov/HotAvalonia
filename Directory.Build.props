@@ -10,7 +10,7 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Authors>Kir_Antipov</Authors>
     <Company>$(Authors)</Company>
     <ReleaseYear>2023</ReleaseYear>
