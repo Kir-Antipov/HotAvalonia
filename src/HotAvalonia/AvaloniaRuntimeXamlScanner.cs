@@ -42,6 +42,11 @@ public static class AvaloniaRuntimeXamlScanner
     private const BindingFlags StaticMember = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
 
     /// <summary>
+    /// Represents binding flags for an instance member, either public or non-public.
+    /// </summary>
+    private const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+    /// <summary>
     /// The expected parameter types for a valid build method.
     /// </summary>
     private static readonly Type[] s_buildSignature = new[] { typeof(IServiceProvider) };
@@ -278,10 +283,11 @@ public static class AvaloniaRuntimeXamlScanner
 
             MethodInfo? populateMethod = FindPopulateMethod(method);
             FieldInfo? populateOverrideField = FindPopulateOverrideField(method);
+            IEnumerable<AvaloniaNamedControlReference> namedReferences = FindAvaloniaNamedControlReferences(method);
             if (populateMethod is null)
                 continue;
 
-            yield return new(uri, method, populateMethod, populateOverrideField);
+            yield return new(uri, method, populateMethod, populateOverrideField, namedReferences);
             (str, uri) = (null, null);
         }
     }
@@ -334,6 +340,100 @@ public static class AvaloniaRuntimeXamlScanner
             .FirstOrDefault(static x => x.Namespace is xamlLoaderNamespaceNamespace && x.Name is xamlLoaderTypeName);
     }
 
+    /// <summary>
+    /// Finds the <c>InitializeComponent</c> method in relation to the given build method.
+    /// </summary>
+    /// <param name="buildMethod">The build method for which the <c>InitializeComponent</c> method is sought.</param>
+    /// <returns>
+    /// The <see cref="MethodInfo"/> object representing the <c>InitializeComponent</c> method, if found;
+    /// otherwise, <c>null</c>.
+    /// </returns>
+    private static MethodInfo? FindInitializeComponentMethod(MethodBase buildMethod)
+    {
+        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
+
+        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
+            return null;
+
+        return FindInitializeComponentControlMethod(declaringType);
+    }
+
+    /// <summary>
+    /// Finds the <c>InitializeComponent</c> method for a user control.
+    /// </summary>
+    /// <param name="userControlType">The type of the user control for which the <c>InitializeComponent</c> method is sought.</param>
+    /// <returns>
+    /// The <see cref="MethodInfo"/> object representing the <c>InitializeComponent</c> method, if found;
+    /// otherwise, <c>null</c>.
+    /// </returns>
+    private static MethodInfo? FindInitializeComponentControlMethod(Type userControlType)
+    {
+        const string initializeComponentMethodName = "InitializeComponent";
+
+        _ = userControlType ?? throw new ArgumentNullException(nameof(userControlType));
+
+        return userControlType
+            .GetMethods(InstanceMember)
+            .OrderByDescending(static x => x.GetParameters().Length)
+            .FirstOrDefault(static x =>
+                x.Name.Equals(initializeComponentMethodName, StringComparison.Ordinal)
+                && x.ReturnType == typeof(void));
+    }
+
+    /// <summary>
+    /// Discovers named control references within the Avalonia control associated with the given build method.
+    /// </summary>
+    /// <param name="buildMethod">The build method associated with the control scope to search within.</param>
+    /// <returns>An enumerable containing discovered named control references.</returns>
+    private static IEnumerable<AvaloniaNamedControlReference> FindAvaloniaNamedControlReferences(MethodBase buildMethod)
+    {
+        MethodInfo? initializeComponent = FindInitializeComponentMethod(buildMethod);
+        byte[]? initializeComponentBody = initializeComponent?.GetMethodBody()?.GetILAsByteArray();
+        if (initializeComponent is null || initializeComponentBody is null)
+            return Array.Empty<AvaloniaNamedControlReference>();
+
+        return ExtractAvaloniaNamedControlReferences(initializeComponentBody, initializeComponent.Module);
+    }
+
+    /// <summary>
+    /// Extracts named control references from the IL of the given method body.
+    /// </summary>
+    /// <param name="methodBody">The IL method body to scan.</param>
+    /// <param name="module">The module containing the method body.</param>
+    /// <returns>An enumerable containing extracted named control references.</returns>
+    private static IEnumerable<AvaloniaNamedControlReference> ExtractAvaloniaNamedControlReferences(ReadOnlyMemory<byte> methodBody, Module module)
+    {
+        // T Avalonia.Controls.NameScopeExtensions.Find<T>(INameScope, string)
+        const string findMethodName = "Find";
+
+        _ = module ?? throw new ArgumentNullException(nameof(module));
+
+        MethodBodyReader reader = new(methodBody);
+        while (reader.Next())
+        {
+            if (reader.OpCode != OpCodes.Ldstr)
+                continue;
+
+            string name = reader.ResolveString(module);
+            if (!reader.Next() || reader.OpCode != OpCodes.Call)
+                continue;
+
+            MethodBase findMethod = reader.ResolveMethod(module);
+            if (!reader.Next() || reader.OpCode != OpCodes.Stfld)
+                continue;
+
+            FieldInfo field = reader.ResolveField(module);
+            if (!findMethod.Name.Equals(findMethodName, StringComparison.Ordinal))
+                continue;
+
+            Type[] genericArguments = findMethod.IsGenericMethod ? findMethod.GetGenericArguments() : Type.EmptyTypes;
+            Type controlType = genericArguments.Length > 0 && field.FieldType.IsAssignableFrom(genericArguments[genericArguments.Length - 1])
+                ? genericArguments[genericArguments.Length - 1]
+                : field.FieldType;
+
+            yield return new(name, controlType, field);
+        }
+    }
 
     /// <summary>
     /// Finds the populate override field in relation to the given build method.

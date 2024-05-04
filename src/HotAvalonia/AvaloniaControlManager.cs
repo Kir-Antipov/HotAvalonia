@@ -90,7 +90,7 @@ public sealed class AvaloniaControlManager
         using IEnumerator<object> controls = _controls.GetEnumerator();
         object? firstControl = controls.MoveNext() ? controls.Current : null;
 
-        AvaloniaControlHelper.Load(xaml, _controlInfo.Uri, firstControl, out MethodInfo? newDynamicPopulate);
+        _controlInfo.Load(xaml, firstControl, out MethodInfo? newDynamicPopulate);
         _dynamicPopulate = newDynamicPopulate ?? _dynamicPopulate;
         if (_dynamicPopulate is null)
             return;
@@ -99,7 +99,7 @@ public sealed class AvaloniaControlManager
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            AvaloniaControlHelper.Populate(_dynamicPopulate, serviceProvider: null, controls.Current);
+            _controlInfo.Populate(serviceProvider: null, controls.Current, _dynamicPopulate);
         }
     }
 
@@ -115,7 +115,7 @@ public sealed class AvaloniaControlManager
         if (_dynamicPopulate is null)
             return false;
 
-        AvaloniaControlHelper.Populate(_dynamicPopulate, provider, control);
+        _controlInfo.Populate(provider, control, _dynamicPopulate);
         return true;
     }
 
