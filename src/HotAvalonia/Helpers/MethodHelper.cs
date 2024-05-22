@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -50,6 +51,63 @@ internal static class MethodHelper
     /// <returns><c>true</c> if the `dotnet watch` tool is attached; otherwise, <c>false</c>.</returns>
     private static bool IsDotnetWatchAttached()
         => Environment.GetEnvironmentVariable("DOTNET_WATCH") is "1";
+
+    /// <summary>
+    /// Gets the type of the instance for instance methods or <c>null</c> for static methods.
+    /// </summary>
+    /// <param name="method">The method for which to get the instance type.</param>
+    /// <returns>
+    /// The declaring type of the method if it's an instance method;
+    /// otherwise, <c>null</c> for static methods.
+    /// </returns>
+    public static Type? GetThisType(this MethodBase method)
+    {
+        if (method.IsStatic)
+            return null;
+
+        Type declaringType = method.DeclaringType;
+        return declaringType.IsValueType ? declaringType.MakeByRefType() : declaringType;
+    }
+
+    /// <summary>
+    /// Gets the return type of the method.
+    /// </summary>
+    /// <param name="method">The method for which to get the return type.</param>
+    /// <returns>The return type of the method.</returns>
+    public static Type GetReturnType(this MethodBase method)
+        => method is MethodInfo methodInfo ? methodInfo.ReturnType : typeof(void);
+
+    /// <summary>
+    /// Gets an array of the parameter types for the method.
+    /// </summary>
+    /// <param name="method">The method for which to get the parameter types.</param>
+    /// <returns>An array of the parameter types of the method.</returns>
+    public static Type[] GetParameterTypes(this MethodBase method)
+        => Array.ConvertAll(method.GetParameters(), static x => x.ParameterType);
+
+    /// <summary>
+    /// Gets the delegate type that matches the method's signature.
+    /// </summary>
+    /// <param name="method">The method for which to get the delegate type.</param>
+    /// <returns>A delegate type that matches the method's signature.</returns>
+    public static Type GetDelegateType(this MethodBase method)
+        => Expression.GetDelegateType([.. method.GetParameterTypes(), method.GetReturnType()]);
+
+    /// <summary>
+    /// Gets the delegate type that matches the method's signature,
+    /// including the instance type for instance methods.
+    /// </summary>
+    /// <param name="method">The method for which to get the static delegate type.</param>
+    /// <returns>
+    /// A delegate type that matches the method's signature,
+    /// including the instance type for instance methods.
+    /// </returns>
+    public static Type GetStaticDelegateType(this MethodBase method)
+        => Expression.GetDelegateType([
+            .. method.GetThisType() is Type thisType ? [thisType] : Type.EmptyTypes,
+            .. method.GetParameterTypes(),
+            method.GetReturnType()
+        ]);
 
     /// <summary>
     /// Validates the compatibility of a method's parameter types with a given signature.
@@ -119,7 +177,7 @@ internal static class MethodHelper
     /// </summary>
     /// <param name="method">The method for which to obtain the function pointer.</param>
     /// <returns>The function pointer of the method.</returns>
-    public static nint GetFunctionPointer(MethodBase method)
+    public static nint GetFunctionPointer(this MethodBase method)
     {
         RuntimeHelpers.PrepareMethod(method.MethodHandle);
 
@@ -131,7 +189,7 @@ internal static class MethodHelper
     /// </summary>
     /// <param name="method">The method for which to obtain the function pointer address.</param>
     /// <returns>The memory address of the method's function pointer.</returns>
-    public static nint GetFunctionPointerAddress(MethodBase method)
+    public static nint GetFunctionPointerAddress(this MethodBase method)
     {
         RuntimeHelpers.PrepareMethod(method.MethodHandle);
         nint address;
