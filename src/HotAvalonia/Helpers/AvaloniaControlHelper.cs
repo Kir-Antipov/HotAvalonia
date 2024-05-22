@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.XamlIl.Runtime;
 using Avalonia.Styling;
+using HotAvalonia.Reflection.Inject;
 
 namespace HotAvalonia.Helpers;
 
@@ -89,75 +91,35 @@ internal static class AvaloniaControlHelper
         populate.Invoke(null, args);
     }
 
-    /// <inheritdoc cref="TryOverridePopulate(FieldInfo, Action{IServiceProvider, object})"/>
-    public static bool TryOverridePopulate(FieldInfo populateOverride, Action<object> populate)
-    {
-        _ = populateOverride ?? throw new ArgumentNullException(nameof(populateOverride));
-        _ = populate ?? throw new ArgumentNullException(nameof(populate));
-
-        if (populateOverride.FieldType == typeof(Action<object>))
-        {
-            populateOverride.SetValue(null, (Action<object>)PopulateAndOverride);
-            return true;
-        }
-        else if (populateOverride.FieldType == typeof(Action<IServiceProvider?, object>))
-        {
-            populateOverride.SetValue(null, (Action<IServiceProvider?, object>)PopulateAndOverrideWithServiceProvider);
-            return true;
-        }
-
-        return false;
-
-        void PopulateAndOverride(object control)
-        {
-            populate(control);
-            populateOverride.SetValue(null, (Action<object>)PopulateAndOverride);
-        }
-
-        void PopulateAndOverrideWithServiceProvider(IServiceProvider? serviceProvider, object control)
-        {
-            populate(control);
-            populateOverride.SetValue(null, (Action<IServiceProvider?, object>)PopulateAndOverrideWithServiceProvider);
-        }
-    }
-
     /// <summary>
-    /// Attempts to inject the given populate action into a given field.
+    /// Attempts to inject the given populate action into the specified field.
     /// </summary>
-    /// <param name="populateOverride">The field information to inject the new populate action into.</param>
+    /// <param name="populateOverride">The field to inject the new population logic into.</param>
     /// <param name="populate">The populate action to override the original one with.</param>
-    /// <returns><c>true</c> if the override was successful; otherwise, <c>false</c>.</returns>
-    public static bool TryOverridePopulate(FieldInfo populateOverride, Action<IServiceProvider, object> populate)
+    /// <param name="injection">
+    /// When this method returns, contains the <see cref="IInjection"/> instance if the injection was successful;
+    /// otherwise, <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> if the injection was successful;
+    /// otherwise, <c>false</c>.
+    /// </returns>
+    public static bool TryInjectPopulateOverride(
+        FieldInfo populateOverride,
+        Action<IServiceProvider, object> populate,
+        [NotNullWhen(true)] out IInjection? injection)
     {
         _ = populateOverride ?? throw new ArgumentNullException(nameof(populateOverride));
         _ = populate ?? throw new ArgumentNullException(nameof(populate));
 
-        if (populateOverride.FieldType == typeof(Action<object>))
+        if (!AvaloniaRuntimeXamlScanner.IsPopulateOverrideField(populateOverride))
         {
-            populateOverride.SetValue(null, (Action<object>)PopulateAndOverride);
-            return true;
-        }
-        else if (populateOverride.FieldType == typeof(Action<IServiceProvider?, object>))
-        {
-            populateOverride.SetValue(null, (Action<IServiceProvider?, object>)PopulateAndOverrideWithServiceProvider);
-            return true;
+            injection = null;
+            return false;
         }
 
-        return false;
-
-        void PopulateAndOverride(object control)
-        {
-            populate(XamlIlRuntimeHelpers.CreateRootServiceProviderV2(), control);
-            populateOverride.SetValue(null, (Action<object>)PopulateAndOverride);
-        }
-
-        void PopulateAndOverrideWithServiceProvider(IServiceProvider? serviceProvider, object control)
-        {
-            serviceProvider ??= XamlIlRuntimeHelpers.CreateRootServiceProviderV2();
-
-            populate(serviceProvider, control);
-            populateOverride.SetValue(null, (Action<IServiceProvider?, object>)PopulateAndOverrideWithServiceProvider);
-        }
+        injection = new OverridePopulateInjection(populateOverride, populate);
+        return true;
     }
 
     /// <summary>
@@ -196,5 +158,94 @@ internal static class AvaloniaControlHelper
         const string dynamicResourceName = "\"{DynamicResource ";
 
         return xaml.Replace(staticResourceName, dynamicResourceName);
+    }
+}
+
+/// <summary>
+/// Provides functionality to override the population mechanism of Avalonia controls using a custom delegate.
+/// </summary>
+/// <remarks>
+/// This class specifically targets the hidden <c>!XamlIlPopulateOverride</c> field to hijack
+/// the logic of control population, allowing for a fallback mechanism whenever proper
+/// injection techniques are not available.
+/// </remarks>
+file sealed class OverridePopulateInjection : IInjection
+{
+    /// <summary>
+    /// The field to inject the new population logic into.
+    /// </summary>
+    private readonly FieldInfo _populateOverride;
+
+    /// <summary>
+    /// The populate action to override the original one with.
+    /// </summary>
+    private readonly Delegate? _populate;
+
+    /// <summary>
+    /// The previous value of the <c>!XamlIlPopulateOverride</c> field before it was overridden.
+    /// </summary>
+    private object? _previousPopulateOverride;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OverridePopulateInjection"/> class.
+    /// </summary>
+    /// <param name="populateOverride">The field to inject the new population logic into.</param>
+    /// <param name="populate">The populate action to override the original one with.</param>
+    public OverridePopulateInjection(FieldInfo populateOverride, Action<IServiceProvider, object> populate)
+    {
+        _populateOverride = populateOverride;
+
+        if (populateOverride.FieldType == typeof(Action<object>))
+        {
+            _populate = (object control) =>
+            {
+                populate(XamlIlRuntimeHelpers.CreateRootServiceProviderV2(), control);
+                _populateOverride.SetValue(null, _populate);
+            };
+        }
+        else if (populateOverride.FieldType == typeof(Action<IServiceProvider?, object>))
+        {
+            _populate = (IServiceProvider? serviceProvider, object control) =>
+            {
+                populate(serviceProvider ?? XamlIlRuntimeHelpers.CreateRootServiceProviderV2(), control);
+                _populateOverride.SetValue(null, _populate);
+            };
+        }
+
+        Apply();
+    }
+
+    /// <summary>
+    /// Finalizes an instance of the <see cref="OverridePopulateInjection"/> class.
+    /// Reverts the method injection if not already done.
+    /// </summary>
+    ~OverridePopulateInjection()
+    {
+        Undo();
+    }
+
+    /// <summary>
+    /// Applies the method injection.
+    /// </summary>
+    public void Apply()
+    {
+        _previousPopulateOverride = _populateOverride.GetValue(null);
+        _populateOverride.SetValue(null, _populate);
+    }
+
+    /// <summary>
+    /// Reverts all the effects caused by the method injection.
+    /// </summary>
+    public void Undo()
+    {
+        _populateOverride.SetValue(null, _previousPopulateOverride);
+        _previousPopulateOverride = null;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        Undo();
+        GC.SuppressFinalize(this);
     }
 }
