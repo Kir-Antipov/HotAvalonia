@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace HotAvalonia.Helpers;
@@ -130,5 +131,23 @@ internal static class ILGeneratorHelper
         generator.Emit(OpCodes.Ldloca, valueInitializer);
         generator.Emit(OpCodes.Initobj, type);
         generator.Emit(OpCodes.Ldloc, valueInitializer);
+    }
+
+    /// <summary>
+    /// Emits a call to the specified method, using the appropriate opcode based on whether the method is virtual.
+    /// </summary>
+    /// <param name="generator">The IL generator used for code emission.</param>
+    /// <param name="method">The method to be called.</param>
+    public static void EmitCall(this ILGenerator generator, MethodBase method)
+    {
+        if (method is MethodInfo methodInfo)
+        {
+            generator.EmitCall(methodInfo.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, methodInfo, null);
+        }
+        else
+        {
+            generator.EmitLdc_IN(method.GetFunctionPointer());
+            generator.EmitCalli(OpCodes.Calli, method.CallingConvention, method.GetReturnType(), method.GetParameterTypes(), null);
+        }
     }
 }
