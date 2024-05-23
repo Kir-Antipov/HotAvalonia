@@ -1,5 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using HotAvalonia.Helpers;
+using HotAvalonia.Reflection.Inject;
 
 namespace HotAvalonia;
 
@@ -163,17 +165,27 @@ public sealed class AvaloniaControlInfo
         Refresh(control);
     }
 
-    /// <inheritdoc cref="TryOverridePopulate(Action{IServiceProvider, object})"/>
-    public bool TryOverridePopulate(Action<object> populate)
-        => _populateOverride is not null && AvaloniaControlHelper.TryOverridePopulate(_populateOverride, populate);
-
     /// <summary>
     /// Attempts to override the populate method with a specified populate action.
     /// </summary>
-    /// <param name="populate">The populate action to override the original method with.</param>
-    /// <returns><c>true</c> if the override was successful; otherwise, <c>false</c>.</returns>
-    public bool TryOverridePopulate(Action<IServiceProvider?, object> populate)
-        => _populateOverride is not null && AvaloniaControlHelper.TryOverridePopulate(_populateOverride, populate);
+    /// <param name="populate">The populate action to override the original one with.</param>
+    /// <param name="injection">
+    /// When this method returns, contains the <see cref="IInjection"/> instance if the injection was successful;
+    /// otherwise, <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> if the injection was successful;
+    /// otherwise, <c>false</c>.
+    /// </returns>
+    internal bool TryInjectPopulateOverride(Action<IServiceProvider?, object> populate, [NotNullWhen(true)] out IInjection? injection)
+    {
+        injection = null;
+
+        if (_populateOverride is null)
+            return false;
+
+        return AvaloniaControlHelper.TryInjectPopulateOverride(_populateOverride, populate, out injection);
+    }
 
     /// <summary>
     /// Refreshes the inner state of the given control after it has been populated.
