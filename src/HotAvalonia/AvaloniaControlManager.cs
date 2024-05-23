@@ -9,7 +9,7 @@ namespace HotAvalonia;
 /// <summary>
 /// Manages the lifecycle and state of Avalonia controls.
 /// </summary>
-public sealed class AvaloniaControlManager
+public sealed class AvaloniaControlManager : IDisposable
 {
     /// <summary>
     /// The information about the Avalonia control being managed.
@@ -32,6 +32,12 @@ public sealed class AvaloniaControlManager
     private MethodInfo? _dynamicPopulate;
 
     /// <summary>
+    /// The <see cref="IInjection"/> instance responsible for injecting
+    /// a callback into the control's populate method.
+    /// </summary>
+    private readonly IInjection? _populateInjection;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AvaloniaControlManager"/> class.
     /// </summary>
     /// <param name="controlInfo">The Avalonia control information.</param>
@@ -45,7 +51,7 @@ public sealed class AvaloniaControlManager
         _fileName = fileName;
         _controls = new();
 
-        if (!TrySubscribeToPopulate(controlInfo, OnPopulate))
+        if (!TryInjectPopulateCallback(controlInfo, OnPopulate, out _populateInjection))
             LoggingHelper.Logger?.Log(this, "Failed to subscribe to the 'Populate' event for {Type} ({Uri}). The control won't be reloaded upon file changes.", controlInfo.ControlType, controlInfo.Uri);
     }
 
@@ -62,6 +68,10 @@ public sealed class AvaloniaControlManager
         get => _fileName;
         set => _fileName = value ?? throw new ArgumentNullException(nameof(value));
     }
+
+    /// <inheritdoc/>
+    public void Dispose()
+        => _populateInjection?.Dispose();
 
     /// <summary>
     /// Reloads the controls associated with this manager asynchronously.
@@ -120,25 +130,52 @@ public sealed class AvaloniaControlManager
     }
 
     /// <summary>
-    /// Attempts to subscribe to the populate method of the given control.
+    /// Attempts to inject a callback into the populate method of the given control.
     /// </summary>
     /// <param name="controlInfo">The Avalonia control information.</param>
     /// <param name="onPopulate">The callback to invoke when a control is populated.</param>
-    /// <returns><c>true</c> if the subscription was successful; otherwise, <c>false</c>.</returns>
-    private static bool TrySubscribeToPopulate(AvaloniaControlInfo controlInfo, Func<IServiceProvider?, object, bool> onPopulate)
+    /// <param name="injection">
+    /// When this method returns, contains the <see cref="IInjection"/> instance if the injection was successful;
+    /// otherwise, <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> if the injection was successful;
+    /// otherwise, <c>false</c>.
+    /// </returns>
+    private static bool TryInjectPopulateCallback(
+        AvaloniaControlInfo controlInfo,
+        Func<IServiceProvider?, object, bool> onPopulate,
+        out IInjection? injection)
     {
-        if (MethodHelper.IsMethodSwappingAvailable())
+        // At this point, we have three different fallbacks at our disposal:
+        //  - First, we try to perform an injection via MonoMod. It's great and reliable;
+        //    however, it doesn't support architectures other than x86/x86_64 (at least at
+        //    the time of writing), and it requires explicit support for every single new
+        //    .NET release.
+        //  - Therefore, in case the code is run on arm64 or via a .NET runtime that MonoMod
+        //    doesn't currently support, we fall back to my homebrewed injection technique,
+        //    which works consistently across different runtimes and architectures. However,
+        //    it requires JIT not to optimize the methods we are injecting into, which is
+        //    naturally achieved whenever an app is compiled using the Debug configuration
+        //    and then run with a debugger attached to it.
+        //  - Finally, in case this whole endeavor is run on arm64 via .NET 42 using the
+        //    Release configuration, rendering `CallbackInjector` unusable, we fall back to
+        //    undocumented `!XamlIlPopulateOverride` fields. These fields are only generated
+        //    for controls that have their `x:Class` property set, leaving things like styles
+        //    and resource dictionaries unreloadable. However, partially working hot reload
+        //    is still better than no hot reload at all, right?
+
+        if (CallbackInjector.IsSupported)
         {
-            CallbackInjector.Inject(controlInfo.PopulateMethod, onPopulate);
+            injection = CallbackInjector.Inject(controlInfo.PopulateMethod, onPopulate);
             return true;
         }
-
-        return controlInfo.TryOverridePopulate(PopulateOverride);
 
         void PopulateOverride(IServiceProvider? provider, object control)
         {
             if (!onPopulate(provider, control))
                 controlInfo.Populate(provider, control);
         }
+        return controlInfo.TryInjectPopulateOverride(PopulateOverride, out injection);
     }
 }

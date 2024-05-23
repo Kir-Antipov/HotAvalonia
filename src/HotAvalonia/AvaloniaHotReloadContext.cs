@@ -153,6 +153,11 @@ public sealed class AvaloniaHotReloadContext : IDisposable
         _watcher.Moved -= OnMoved;
         _watcher.Error -= OnError;
         _watcher.Dispose();
+
+        foreach (AvaloniaControlManager control in _controls.Values)
+            control.Dispose();
+
+        _controls.Clear();
     }
 
     /// <summary>
