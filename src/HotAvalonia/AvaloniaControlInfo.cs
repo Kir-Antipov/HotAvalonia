@@ -101,17 +101,17 @@ public sealed class AvaloniaControlInfo
     /// <summary>
     /// The method responsible for building the control instance.
     /// </summary>
-    public MethodBase BuildMethod => _build;
+    internal MethodBase BuildMethod => _build;
 
     /// <summary>
     /// The method responsible for populating the control instance with data.
     /// </summary>
-    public MethodInfo PopulateMethod => _populate;
+    internal MethodInfo PopulateMethod => _populate;
 
     /// <summary>
     /// The field responsible for overriding the populate logic of the control.
     /// </summary>
-    public FieldInfo? PopulateOverrideProperty => _populateOverride;
+    internal FieldInfo? PopulateOverrideProperty => _populateOverride;
 
     /// <summary>
     /// The named references within the control's scope.
@@ -139,11 +139,7 @@ public sealed class AvaloniaControlInfo
     /// <param name="serviceProvider">The service provider used in the build process.</param>
     /// <returns>The built control instance.</returns>
     public object Build(IServiceProvider? serviceProvider = null)
-    {
-        object control = AvaloniaControlHelper.Build(_build, serviceProvider);
-        Refresh(control);
-        return control;
-    }
+        => AvaloniaControlHelper.Build(_build, serviceProvider);
 
     /// <inheritdoc cref="Populate(IServiceProvider?, object)"/>
     public void Populate(object control)
@@ -159,7 +155,7 @@ public sealed class AvaloniaControlInfo
     /// <param name="serviceProvider">The service provider used in the populate process.</param>
     /// <param name="control">The control instance to populate.</param>
     /// <param name="populateMethod">The method used to populate the control.</param>
-    public void Populate(IServiceProvider? serviceProvider, object control, MethodBase populateMethod)
+    internal void Populate(IServiceProvider? serviceProvider, object control, MethodBase populateMethod)
     {
         AvaloniaControlHelper.Populate(populateMethod, serviceProvider, control);
         Refresh(control);
