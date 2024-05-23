@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using HotAvalonia.Helpers;
+using MonoMod.Core.Platforms;
+using MonoMod.RuntimeDetour;
 
 namespace HotAvalonia.Reflection.Inject;
 
@@ -41,6 +43,7 @@ internal static class MethodInjector
     public static IInjection Inject(MethodBase source, MethodInfo replacement) => InjectionType switch
     {
         InjectionType.Bytecode => new BytecodeInjection(source, replacement),
+        InjectionType.Native => new NativeInjection(source, replacement),
         _ => ThrowNotSupportedException(),
     };
 
@@ -75,6 +78,18 @@ internal static class MethodInjector
     /// <returns>The <see cref="Inject.InjectionType"/> supported by the current runtime environment.</returns>
     private static InjectionType DetectSupportedInjectionType()
     {
+        try
+        {
+            // `PlatformTriple.Current` may throw exceptions such as:
+            //  - NotImplementedException
+            //  - PlatformNotSupportedException
+            //  - etc.
+            // This happens if the current environment is not (yet) supported.
+            if (PlatformTriple.Current is not null)
+                return InjectionType.Native;
+        }
+        catch { }
+
         if (Environment.Version < s_runtimeVersionThatBrokePrepareMethod)
             return InjectionType.Bytecode;
 
@@ -84,6 +99,40 @@ internal static class MethodInjector
 
         return InjectionType.None;
     }
+}
+
+/// <summary>
+/// Provides functionality to inject a replacement method using native code hooks.
+/// </summary>
+file sealed class NativeInjection : IInjection
+{
+    /// <summary>
+    /// The hook used for the method injection.
+    /// </summary>
+    private readonly Hook _hook;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NativeInjection"/> class.
+    /// </summary>
+    /// <param name="source">The method to be replaced.</param>
+    /// <param name="replacement">The replacement method implementation.</param>
+    public NativeInjection(MethodBase source, MethodInfo replacement)
+    {
+        _hook = new(source, replacement, applyByDefault: true);
+    }
+
+    /// <summary>
+    /// Applies the method injection.
+    /// </summary>
+    public void Apply() => _hook.Apply();
+
+    /// <summary>
+    /// Reverts all the effects caused by the method injection.
+    /// </summary>
+    public void Undo() => _hook.Undo();
+
+    /// <inheritdoc/>
+    public void Dispose() => _hook.Dispose();
 }
 
 /// <summary>

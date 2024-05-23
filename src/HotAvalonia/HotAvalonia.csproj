@@ -12,6 +12,13 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="$(AvaloniaVersion)" PrivateAssets="All" />
+
+    <!-- Technically, we do not need an explicit reference for `MonoMod.Backports`. -->
+    <!-- However, for some ungodly reason, it includes its own polyfills for the `System.Memory` types, -->
+    <!-- which clash with... the `System.Memory` types. So, for the project to build successfully, -->
+    <!-- we **must** explicitly alias those. Sigh... -->
+    <PackageReference Include="MonoMod.Backports" Version="1.1.1" Aliases="MMB" />
+    <PackageReference Include="MonoMod.RuntimeDetour" Version="25.1.1" />
   </ItemGroup>
 
 </Project>
