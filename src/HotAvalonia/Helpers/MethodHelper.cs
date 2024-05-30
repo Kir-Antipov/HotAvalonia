@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Mono.Cecil;
 
 namespace HotAvalonia.Helpers;
 
@@ -133,5 +134,57 @@ internal static class MethodHelper
             throw new InvalidOperationException("Unable to determine the function pointer address.");
 
         return address;
+    }
+
+    /// <summary>
+    /// Gets the file path of the source code file where the specified method is defined.
+    /// </summary>
+    /// <param name="method">The method to get the file path for.</param>
+    /// <returns>
+    /// The file path of the source code file where the specified method is defined,
+    /// or <c>null</c> if the path cannot be determined.
+    /// </returns>
+    public static string? GetFilePath(this MethodBase method)
+    {
+        if (method is not { DeclaringType: { FullName.Length: > 0, Assembly.IsDynamic: false } })
+            return null;
+
+        string? location = method.DeclaringType.Assembly.Location;
+        if (location is null || !File.Exists(location))
+            return null;
+
+        ParameterInfo[] parameters = method.GetParameters();
+        TypeDefinition typeDefinition;
+        try
+        {
+            AssemblyDefinition asmDefinition = AssemblyDefinition.ReadAssembly(location, new() { ReadSymbols = true });
+            typeDefinition = asmDefinition.MainModule.GetType(method.DeclaringType.FullName);
+        }
+        catch
+        {
+            return null;
+        }
+
+        foreach (MethodDefinition methodDefinition in typeDefinition.Methods)
+        {
+            if (methodDefinition.Name != method.Name)
+                continue;
+
+            if (methodDefinition.ReturnType.Name != method.GetReturnType().Name)
+                continue;
+
+            if (methodDefinition.Parameters.Count != parameters.Length)
+                continue;
+
+            bool hasSameParameters = parameters
+                .Zip(methodDefinition.Parameters, static (x, y) => x.ParameterType.Name == y.ParameterType.Name)
+                .All(static x => x);
+
+            if (!hasSameParameters)
+                continue;
+
+            return methodDefinition.DebugInformation.SequencePoints.FirstOrDefault()?.Document.Url;
+        }
+        return null;
     }
 }
