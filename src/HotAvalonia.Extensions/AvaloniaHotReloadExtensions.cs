@@ -38,6 +38,7 @@ namespace HotAvalonia
     using global::System;
     using global::System.Diagnostics.CodeAnalysis;
     using global::System.IO;
+    using global::System.Reflection;
     using global::System.Runtime.CompilerServices;
     using global::Avalonia;
 
@@ -50,8 +51,8 @@ namespace HotAvalonia
         /// <summary>
         /// A mapping between Avalonia <see cref="Application"/> instances and their associated hot reload context.
         /// </summary>
-        private static readonly ConditionalWeakTable<Application, AvaloniaHotReloadContext> s_apps =
-            new ConditionalWeakTable<Application, AvaloniaHotReloadContext>();
+        private static readonly ConditionalWeakTable<Application, IHotReloadContext> s_apps =
+            new ConditionalWeakTable<Application, IHotReloadContext>();
 
         /// <summary>
         /// Enables hot reload functionality for the given Avalonia application.
@@ -61,19 +62,31 @@ namespace HotAvalonia
         public static void EnableHotReload(this Application app, [CallerFilePath] string? appFilePath = null)
         {
             _ = app ?? throw new ArgumentNullException(nameof(app));
-            _ = appFilePath ?? throw new ArgumentNullException(nameof(appFilePath));
 
-            if (!s_apps.TryGetValue(app, out AvaloniaHotReloadContext? context))
+            if (!s_apps.TryGetValue(app, out IHotReloadContext? context))
             {
-                string appXamlFilePath = SourceCodeFileNameToXamlFileName(appFilePath);
-                if (!File.Exists(appXamlFilePath))
-                    throw new ArgumentException("The corresponding XAML file could not be found.", nameof(appFilePath));
+                if (!string.IsNullOrEmpty(appFilePath) && !File.Exists(appFilePath))
+                    throw new FileNotFoundException("The corresponding XAML file could not be found.", appFilePath);
 
-                context = AvaloniaHotReloadContext.FromControl(app, appXamlFilePath);
+                if (!string.IsNullOrEmpty(appFilePath))
+                    AvaloniaProjectLocator.AddHint(app.GetType(), appFilePath);
+
+                context = AvaloniaHotReloadContext.FromAppDomain(AppDomain.CurrentDomain);
                 s_apps.Add(app, context);
             }
 
             context.EnableHotReload();
+        }
+
+        /// <summary>
+        /// Enables hot reload functionality for the given Avalonia application.
+        /// </summary>
+        /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
+        /// <param name="projectPathResolver">The callback function capable of resolving a project path for a given assembly.</param>
+        public static void EnableHotReload(this Application app, Func<Assembly, string?> projectPathResolver)
+        {
+            AvaloniaProjectLocator.AddHint(projectPathResolver);
+            EnableHotReload(app, string.Empty);
         }
 
         /// <summary>
@@ -84,22 +97,8 @@ namespace HotAvalonia
         {
             _ = app ?? throw new ArgumentNullException(nameof(app));
 
-            if (s_apps.TryGetValue(app, out AvaloniaHotReloadContext? context))
+            if (s_apps.TryGetValue(app, out IHotReloadContext? context))
                 context.DisableHotReload();
-        }
-
-        /// <summary>
-        /// Converts the source code file name to its associated XAML file name.
-        /// </summary>
-        /// <param name="sourceCodeFileName">The source code file name to be converted.</param>
-        /// <returns>The associated XAML file name.</returns>
-        private static string SourceCodeFileNameToXamlFileName(string sourceCodeFileName)
-        {
-            string xamlFileName = Path.Combine(
-                Path.GetDirectoryName(sourceCodeFileName),
-                Path.GetFileNameWithoutExtension(sourceCodeFileName));
-
-            return Path.HasExtension(xamlFileName) ? xamlFileName : sourceCodeFileName;
         }
     }
 }
@@ -108,6 +107,7 @@ namespace HotAvalonia
 {
     using global::System.Diagnostics;
     using global::System.Diagnostics.CodeAnalysis;
+    using global::System.Reflection;
     using global::Avalonia;
 
     /// <summary>
@@ -123,6 +123,16 @@ namespace HotAvalonia
         /// <param name="appFilePath">The file path of the application's main source file. Optional if the method called within the file of interest.</param>
         [Conditional("DEBUG")]
         public static void EnableHotReload(this Application app, string? appFilePath = null)
+        {
+        }
+
+        /// <summary>
+        /// Enables hot reload functionality for the given Avalonia application.
+        /// </summary>
+        /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
+        /// <param name="projectPathResolver">The callback function capable of resolving a project path for a given assembly.</param>
+        [Conditional("DEBUG")]
+        public static void EnableHotReload(this Application app, Func<Assembly, string?> projectPathResolver)
         {
         }
 
