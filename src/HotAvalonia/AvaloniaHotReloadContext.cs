@@ -5,9 +5,136 @@ using HotAvalonia.IO;
 namespace HotAvalonia;
 
 /// <summary>
+/// Provides methods to create hot reload contexts for Avalonia applications.
+/// </summary>
+public static class AvaloniaHotReloadContext
+{
+    /// <summary>
+    /// Creates a hot reload context for all assemblies within the specified <see cref="AppDomain"/>.
+    /// </summary>
+    /// <remarks>
+    /// This context will include all currently loaded assemblies and any of those that are loaded
+    /// in the future, automatically determining if they contain Avalonia controls and if their
+    /// source project directories can be located.
+    /// </remarks>
+    /// <param name="appDomain">The <see cref="AppDomain"/> to create the hot reload context from.</param>
+    /// <returns>A hot reload context for the specified application domain.</returns>
+    public static IHotReloadContext FromAppDomain(AppDomain appDomain)
+    {
+        _ = appDomain ?? throw new ArgumentNullException(nameof(appDomain));
+
+        return HotReloadContext.FromAppDomain(appDomain, static (_, asm) => FromUnverifiedAssembly(asm));
+    }
+
+    /// <summary>
+    /// Creates a hot reload context from the specified assembly, if it contains Avalonia controls;
+    /// otherwise, returns <c>null</c>.
+    /// </summary>
+    /// <param name="assembly">The assembly to create the hot reload context from.</param>
+    /// <returns>
+    /// A hot reload context for the specified assembly, or <c>null</c> if the assembly
+    /// does not contain Avalonia controls or if its source project cannot be located.
+    /// </returns>
+    private static IHotReloadContext? FromUnverifiedAssembly(Assembly assembly)
+    {
+        AvaloniaControlInfo[] controls = AvaloniaRuntimeXamlScanner.FindAvaloniaControls(assembly).ToArray();
+        if (controls.Length == 0)
+            return null;
+
+        if (!AvaloniaProjectLocator.TryGetDirectoryName(assembly, controls, out string? rootPath))
+        {
+            return null;
+        }
+
+        if (!Directory.Exists(rootPath))
+        {
+            return null;
+        }
+
+        return new AvaloniaProjectHotReloadContext(rootPath, controls);
+    }
+
+    /// <inheritdoc cref="FromAssembly(Assembly, string)"/>
+    public static IHotReloadContext FromAssembly(Assembly assembly)
+    {
+        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
+
+        AvaloniaControlInfo[] controls = AvaloniaRuntimeXamlScanner.FindAvaloniaControls(assembly).ToArray();
+        string rootPath = AvaloniaProjectLocator.GetDirectoryName(assembly, controls);
+        return new AvaloniaProjectHotReloadContext(rootPath, controls);
+    }
+
+    /// <summary>
+    /// Creates a hot reload context from the specified assembly, representing a single Avalonia project.
+    /// </summary>
+    /// <param name="assembly">The assembly to create the hot reload context from.</param>
+    /// <param name="rootPath">
+    /// The root path associated with the specified assembly,
+    /// which is the directory containing its source code.
+    /// </param>
+    /// <returns>A hot reload context for the specified assembly.</returns>
+    public static IHotReloadContext FromAssembly(Assembly assembly, string rootPath)
+    {
+        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
+
+        IEnumerable<AvaloniaControlInfo> controls = AvaloniaRuntimeXamlScanner.FindAvaloniaControls(assembly);
+        return new AvaloniaProjectHotReloadContext(rootPath, controls);
+    }
+
+    /// <inheritdoc cref="FromControl(object, string)"/>
+    public static IHotReloadContext FromControl(object control)
+    {
+        _ = control ?? throw new ArgumentNullException(nameof(control));
+
+        return FromControl(control.GetType());
+    }
+
+    /// <inheritdoc cref="FromControl(Type, string)"/>
+    public static IHotReloadContext FromControl(Type controlType)
+    {
+        _ = controlType ?? throw new ArgumentNullException(nameof(controlType));
+
+        return FromAssembly(controlType.Assembly);
+    }
+
+    /// <summary>
+    /// Creates a hot reload context for the assembly containing the specified control.
+    /// </summary>
+    /// <param name="control">The control to create the hot reload context from.</param>
+    /// <param name="controlPath">The path to the control's XAML file.</param>
+    /// <returns>A hot reload context for the specified control.</returns>
+    public static IHotReloadContext FromControl(object control, string controlPath)
+    {
+        _ = control ?? throw new ArgumentNullException(nameof(control));
+
+        return FromControl(control.GetType(), controlPath);
+    }
+
+    /// <summary>
+    /// Creates a hot reload context for the assembly containing the specified control.
+    /// </summary>
+    /// <param name="controlType">The type of the control to create the hot reload context from.</param>
+    /// <param name="controlPath">The path to the control's XAML file.</param>
+    /// <returns>A hot reload context for the specified control type.</returns>
+    public static IHotReloadContext FromControl(Type controlType, string controlPath)
+    {
+        _ = controlType ?? throw new ArgumentNullException(nameof(controlType));
+        _ = controlPath ?? throw new ArgumentNullException(nameof(controlPath));
+        _ = File.Exists(controlPath) ? controlPath : throw new FileNotFoundException(controlPath);
+
+        controlPath = Path.GetFullPath(controlPath);
+        if (!AvaloniaRuntimeXamlScanner.TryExtractControlUri(controlType, out string? controlUri))
+            throw new ArgumentException("The provided control is not a valid user-defined Avalonia control. Could not determine its URI.", nameof(controlType));
+
+        string rootPath = UriHelper.ResolveHostPath(controlUri, controlPath);
+        return FromAssembly(controlType.Assembly, rootPath);
+    }
+}
+
+/// <summary>
 /// Manages the hot reload context for Avalonia controls.
 /// </summary>
-public sealed class AvaloniaHotReloadContext : IDisposable
+file sealed class AvaloniaProjectHotReloadContext : IHotReloadContext
 {
     /// <summary>
     /// The Avalonia control managers, mapped by their respective file paths.
@@ -20,16 +147,16 @@ public sealed class AvaloniaHotReloadContext : IDisposable
     private readonly FileWatcher _watcher;
 
     /// <summary>
-    /// Indicates whether the hot reload is currently enabled.
+    /// Indicates whether hot reload is currently enabled.
     /// </summary>
     private bool _enabled;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AvaloniaHotReloadContext"/> class.
+    /// Initializes a new instance of the <see cref="AvaloniaProjectHotReloadContext"/> class.
     /// </summary>
     /// <param name="rootPath">The root directory of the Avalonia project to watch.</param>
     /// <param name="controls">The list of Avalonia controls to manage.</param>
-    private AvaloniaHotReloadContext(string rootPath, IEnumerable<AvaloniaControlInfo> controls)
+    public AvaloniaProjectHotReloadContext(string rootPath, IEnumerable<AvaloniaControlInfo> controls)
     {
         _ = rootPath ?? throw new ArgumentNullException(nameof(rootPath));
         _ = Directory.Exists(rootPath) ? rootPath : throw new DirectoryNotFoundException(rootPath);
@@ -45,53 +172,30 @@ public sealed class AvaloniaHotReloadContext : IDisposable
         _watcher.Error += OnError;
     }
 
-    /// <summary>
-    /// Creates a hot reload context using the provided assembly.
-    /// </summary>
-    /// <param name="assembly">The assembly containing Avalonia controls.</param>
-    /// <param name="rootPath">The root directory of the Avalonia project.</param>
-    /// <returns>A new instance of the <see cref="AvaloniaHotReloadContext"/> class.</returns>
-    public static AvaloniaHotReloadContext FromAssembly(Assembly assembly, string rootPath)
-    {
-        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
-
-        return new(rootPath, AvaloniaRuntimeXamlScanner.FindAvaloniaControls(assembly));
-    }
-
-    /// <summary>
-    /// Creates a hot reload context using the provided control and its file path.
-    /// </summary>
-    /// <param name="control">The control belonging to the Avalonia project that needs to be managed.</param>
-    /// <param name="controlPath">The full file path that leads to the XAML file defining the control.</param>
-    /// <returns>A new instance of the <see cref="AvaloniaHotReloadContext"/> class.</returns>
-    public static AvaloniaHotReloadContext FromControl(object control, string controlPath)
-    {
-        _ = control ?? throw new ArgumentNullException(nameof(control));
-        _ = controlPath ?? throw new ArgumentNullException(nameof(controlPath));
-        _ = File.Exists(controlPath) ? controlPath : throw new FileNotFoundException(controlPath);
-
-        controlPath = Path.GetFullPath(controlPath);
-        if (!AvaloniaRuntimeXamlScanner.TryExtractControlUri(control.GetType(), out string? controlUri))
-            throw new ArgumentException("The provided control is not a valid user-defined Avalonia control. Could not determine its URI.", nameof(control));
-
-        string rootPath = UriHelper.ResolveHostPath(controlUri, controlPath);
-        return FromAssembly(control.GetType().Assembly, rootPath);
-    }
-
-    /// <summary>
-    /// Indicates whether the hot reload is currently enabled.
-    /// </summary>
+    /// <inheritdoc/>
     public bool IsHotReloadEnabled => _enabled;
 
-    /// <summary>
-    /// Enables the hot reload feature.
-    /// </summary>
+    /// <inheritdoc/>
     public void EnableHotReload() => _enabled = true;
 
-    /// <summary>
-    /// Disables the hot reload feature.
-    /// </summary>
+    /// <inheritdoc/>
     public void DisableHotReload() => _enabled = false;
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        DisableHotReload();
+
+        _watcher.Changed -= OnChanged;
+        _watcher.Moved -= OnMoved;
+        _watcher.Error -= OnError;
+        _watcher.Dispose();
+
+        foreach (AvaloniaControlManager control in _controls.Values)
+            control.Dispose();
+
+        _controls.Clear();
+    }
 
     /// <summary>
     /// Handles the file changes by attempting to reload the corresponding Avalonia control.
@@ -141,24 +245,6 @@ public sealed class AvaloniaHotReloadContext : IDisposable
     /// <param name="args">The event arguments containing the error details.</param>
     private void OnError(object sender, ErrorEventArgs args)
         => LoggingHelper.Logger?.Log(sender, "An unexpected error occurred while monitoring file changes: {Error}", args.GetException());
-
-    /// <summary>
-    /// Disposes the resources used by this context, effectively disabling the hot reload.
-    /// </summary>
-    public void Dispose()
-    {
-        _enabled = false;
-
-        _watcher.Changed -= OnChanged;
-        _watcher.Moved -= OnMoved;
-        _watcher.Error -= OnError;
-        _watcher.Dispose();
-
-        foreach (AvaloniaControlManager control in _controls.Values)
-            control.Dispose();
-
-        _controls.Clear();
-    }
 
     /// <summary>
     /// Resolves the control manager for the given Avalonia control.
