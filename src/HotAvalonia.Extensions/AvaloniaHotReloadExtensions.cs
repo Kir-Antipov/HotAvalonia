@@ -36,6 +36,7 @@
 namespace HotAvalonia
 {
     using global::System;
+    using global::System.Diagnostics;
     using global::System.Diagnostics.CodeAnalysis;
     using global::System.IO;
     using global::System.Reflection;
@@ -59,6 +60,7 @@ namespace HotAvalonia
         /// </summary>
         /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
         /// <param name="appFilePath">The file path of the application's main source file. Optional if the method called within the file of interest.</param>
+        [DebuggerStepThrough]
         public static void EnableHotReload(this Application app, [CallerFilePath] string? appFilePath = null)
         {
             _ = app ?? throw new ArgumentNullException(nameof(app));
@@ -83,6 +85,7 @@ namespace HotAvalonia
         /// </summary>
         /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
         /// <param name="projectPathResolver">The callback function capable of resolving a project path for a given assembly.</param>
+        [DebuggerStepThrough]
         public static void EnableHotReload(this Application app, Func<Assembly, string?> projectPathResolver)
         {
             AvaloniaProjectLocator.AddHint(projectPathResolver);
@@ -93,6 +96,7 @@ namespace HotAvalonia
         /// Disables hot reload functionality for the given Avalonia application.
         /// </summary>
         /// <param name="app">The Avalonia application instance for which hot reload should be disabled.</param>
+        [DebuggerStepThrough]
         public static void DisableHotReload(this Application app)
         {
             _ = app ?? throw new ArgumentNullException(nameof(app));
@@ -122,6 +126,7 @@ namespace HotAvalonia
         /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
         /// <param name="appFilePath">The file path of the application's main source file. Optional if the method called within the file of interest.</param>
         [Conditional("DEBUG")]
+        [DebuggerStepThrough]
         public static void EnableHotReload(this Application app, string? appFilePath = null)
         {
         }
@@ -132,6 +137,7 @@ namespace HotAvalonia
         /// <param name="app">The Avalonia application instance for which hot reload should be enabled.</param>
         /// <param name="projectPathResolver">The callback function capable of resolving a project path for a given assembly.</param>
         [Conditional("DEBUG")]
+        [DebuggerStepThrough]
         public static void EnableHotReload(this Application app, Func<Assembly, string?> projectPathResolver)
         {
         }
@@ -141,6 +147,7 @@ namespace HotAvalonia
         /// </summary>
         /// <param name="app">The Avalonia application instance for which hot reload should be disabled.</param>
         [Conditional("DEBUG")]
+        [DebuggerStepThrough]
         public static void DisableHotReload(this Application app)
         {
         }
