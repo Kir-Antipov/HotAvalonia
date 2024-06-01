@@ -1,5 +1,9 @@
 <Project>
 
+  <PropertyGroup Condition="!$(GITHUB_REF.StartsWith('refs/tags/'))">
+    <Version Condition="'$(GITHUB_RUN_NUMBER)' != ''">$(Version)-build.$(GITHUB_RUN_NUMBER)</Version>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(IsPackable)' == 'true'">
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
