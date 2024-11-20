@@ -102,6 +102,7 @@ internal static class CallbackInjector
     private static MethodBuilder EmitInvokeMethod(TypeBuilder typeBuilder, MethodBase target, MethodBase callback, FieldBuilder? thisArg, FieldBuilder? callerMember)
     {
         MethodAttributes attributes = target.IsStatic || MethodInjector.InjectionType is InjectionType.Native ? MethodAttributes.Public | MethodAttributes.Static : MethodAttributes.Public;
+        CallingConventions callingConvention = target.CallingConvention & ~(attributes.HasFlag(MethodAttributes.Static) ? CallingConventions.HasThis : 0);
         Type targetReturnType = target.GetReturnType();
         ParameterInfo[] targetParameters = target.GetParameters();
         Type[] targetParameterTypes = Array.ConvertAll(targetParameters, static x => x.ParameterType);
@@ -118,7 +119,7 @@ internal static class CallbackInjector
         }
         invokeParameterTypes.AddRange(targetParameterTypes);
 
-        MethodBuilder invokeBuilder = typeBuilder.DefineMethod(nameof(Action.Invoke), attributes, target.CallingConvention, targetReturnType, invokeParameterTypes.ToArray());
+        MethodBuilder invokeBuilder = typeBuilder.DefineMethod(nameof(Action.Invoke), attributes, callingConvention, targetReturnType, invokeParameterTypes.ToArray());
         ILGenerator il = invokeBuilder.GetILGenerator();
         Label executeCallback = il.DefineLabel();
         if (targetReturnType != typeof(void))
