@@ -9,6 +9,37 @@ namespace HotAvalonia.Helpers;
 internal static class UriHelper
 {
     /// <summary>
+    /// Represents the scheme used for Avalonia resource URIs.
+    /// </summary>
+    public const string AvaloniaResourceScheme = "avares";
+
+    /// <summary>
+    /// Converts a relative URI to an absolute URI using the specified base URI.
+    /// </summary>
+    /// <param name="uri">
+    /// The URI to convert. If it is already absolute, it is returned unchanged.
+    /// </param>
+    /// <param name="baseUri">
+    /// The base URI to use if <paramref name="uri"/> is relative.
+    /// </param>
+    /// <returns>
+    /// An absolute URI constructed from <paramref name="baseUri"/> and
+    /// <paramref name="uri"/>, or the original URI if it is already absolute.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown if <paramref name="baseUri"/> is <c>null</c> and
+    /// <paramref name="uri"/> is not absolute.
+    /// </exception>
+    public static Uri AsAbsoluteUri(this Uri uri, Uri? baseUri)
+    {
+        if (uri.IsAbsoluteUri)
+            return uri;
+
+        _ = baseUri ?? throw new ArgumentNullException(nameof(baseUri));
+        return new Uri(baseUri, uri);
+    }
+
+    /// <summary>
     /// Combines a root path with a URI to form a complete path.
     /// </summary>
     /// <param name="root">The root path.</param>
