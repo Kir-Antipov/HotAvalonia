@@ -43,7 +43,7 @@ internal sealed class FileWatcher : IDisposable
 
         DirectoryName = rootPath;
         _systemWatcher = CreateFileSystemWatcher(rootPath);
-        _files = new(FileHelper.FileNameComparer);
+        _files = new(PathHelper.PathComparer);
         _eventCache = new(TimeSpan.FromMilliseconds(MinWriteTimeDifference));
         _lock = new();
     }
@@ -232,7 +232,7 @@ internal sealed class FileWatcher : IDisposable
 
         WatcherChangeTypes type = args.ChangeType;
         string path = Path.GetFullPath(args.FullPath);
-        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        StringComparer fileNameComparer = PathHelper.PathComparer;
 
         return _eventCache.Any(x => x.ChangeType == type && fileNameComparer.Equals(Path.GetFullPath(x.FullPath), path));
     }
@@ -272,7 +272,7 @@ internal sealed class FileWatcher : IDisposable
 
         WatcherChangeTypes oppositeChangeType = args.ChangeType is WatcherChangeTypes.Created ? WatcherChangeTypes.Deleted : WatcherChangeTypes.Created;
         string fileName = Path.GetFileName(args.FullPath);
-        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        StringComparer fileNameComparer = PathHelper.PathComparer;
         string? newFullPath = null;
         string? oldFullPath = null;
 
@@ -323,7 +323,7 @@ internal sealed class FileWatcher : IDisposable
             return false;
 
         string path = Path.GetFullPath(args.FullPath);
-        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        StringComparer fileNameComparer = PathHelper.PathComparer;
         string? previousPath;
         lock (_lock)
         {
@@ -381,7 +381,7 @@ internal sealed class FileWatcher : IDisposable
             return false;
 
         string path = Path.GetFullPath(args.FullPath);
-        StringComparer fileNameComparer = FileHelper.FileNameComparer;
+        StringComparer fileNameComparer = PathHelper.PathComparer;
         bool wasDeleted;
         lock (_lock)
         {

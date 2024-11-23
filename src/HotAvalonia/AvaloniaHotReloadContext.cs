@@ -181,7 +181,7 @@ file sealed class AvaloniaProjectHotReloadContext : IHotReloadContext
         rootPath = Path.GetFullPath(rootPath);
         _controls = controls
             .Select(x => ResolveControlManager(x, rootPath))
-            .ToDictionary(static x => x.FileName, FileHelper.FileNameComparer);
+            .ToDictionary(static x => x.FileName, PathHelper.PathComparer);
 
         _watcher = new(rootPath, _controls.Keys);
         _watcher.Changed += OnChanged;

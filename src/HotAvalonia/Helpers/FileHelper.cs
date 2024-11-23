@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 namespace HotAvalonia.Helpers;
 
@@ -72,16 +71,4 @@ internal static class FileHelper
         string text = await reader.ReadToEndAsync().ConfigureAwait(false);
         return text;
     }
-
-    /// <summary>
-    /// Provides a string comparison mechanism suitable for comparing file names in a manner consistent with the current operating system.
-    /// </summary>
-    /// <remarks>
-    /// On Windows, this uses a case-insensitive comparison respecting the current culture.
-    /// On other platforms, it uses a case-sensitive comparison respecting the current culture.
-    /// </remarks>
-    public static StringComparer FileNameComparer
-        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? StringComparer.CurrentCultureIgnoreCase
-            : StringComparer.CurrentCulture;
 }
