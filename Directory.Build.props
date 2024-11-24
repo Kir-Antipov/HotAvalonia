@@ -6,6 +6,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <LangVersion>preview</LangVersion>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <NuGetAudit>false</NuGetAudit>
     <DefineConstants>$(DefineConstants)$(FeatureFlags.Replace("#",";"))</DefineConstants>
   </PropertyGroup>
 
