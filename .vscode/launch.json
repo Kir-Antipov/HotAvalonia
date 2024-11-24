@@ -6,7 +6,7 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/samples/HotReloadDemo/bin/Debug/net8.0/HotReloadDemo.dll",
+      "program": "${workspaceFolder}/samples/HotReloadDemo/bin/Debug/net9.0/HotReloadDemo.dll",
       "args": [],
       "cwd": "${workspaceFolder}/samples/HotReloadDemo",
       "console": "internalConsole",
