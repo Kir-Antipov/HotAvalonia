@@ -363,7 +363,7 @@ file sealed class AvaloniaAssetsHotReloadContext : IHotReloadContext
 
         IAssetLoader? currentAssetLoader = _assetManager.AssetLoader;
         if (currentAssetLoader is not null and not DynamicAssetLoader)
-            _assetManager.AssetLoader = new DynamicAssetLoader(currentAssetLoader);
+            _assetManager.AssetLoader = DynamicAssetLoader.Create(currentAssetLoader);
     }
 
     /// <inheritdoc/>

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Reflection.Emit;
 using Avalonia.Platform;
 using HotAvalonia.Helpers;
 using HotAvalonia.IO;
@@ -9,17 +10,23 @@ namespace HotAvalonia.Assets;
 /// <summary>
 /// Provides a way to load dynamic assets.
 /// </summary>
-internal sealed class DynamicAssetLoader : IAssetLoader
+internal class DynamicAssetLoader
 {
+    /// <summary>
+    /// A factory delegate that can be used to construct new
+    /// <see cref="DynamicAssetLoader"/> instances.
+    /// </summary>
+    private static readonly Func<IAssetLoader, IAssetLoader> s_factory = DynamicAssetLoaderBuilder.CreateDynamicAssetLoaderFactory();
+
     /// <summary>
     /// The fallback asset loader used when dynamic asset loading fails.
     /// </summary>
-    private readonly IAssetLoader _assetLoader;
+    protected readonly IAssetLoader _assetLoader;
 
     /// <summary>
     /// The file system accessor.
     /// </summary>
-    private readonly CachingFileSystemAccessor _fileSystem;
+    protected readonly CachingFileSystemAccessor _fileSystem;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DynamicAssetLoader"/> class.
@@ -27,26 +34,27 @@ internal sealed class DynamicAssetLoader : IAssetLoader
     /// <param name="fallbackAssetLoader">
     /// The fallback <see cref="IAssetLoader"/> to use when dynamic asset loading fails.
     /// </param>
-    public DynamicAssetLoader(IAssetLoader fallbackAssetLoader)
+    protected DynamicAssetLoader(IAssetLoader fallbackAssetLoader)
     {
         _assetLoader = fallbackAssetLoader ?? throw new ArgumentNullException(nameof(fallbackAssetLoader));
         _fileSystem = new();
     }
 
     /// <summary>
+    /// Creates a new instance of the <see cref="DynamicAssetLoader"/> class.
+    /// </summary>
+    /// <param name="fallbackAssetLoader">
+    /// The fallback <see cref="IAssetLoader"/> to use when dynamic asset loading fails.
+    /// </param>
+    public static IAssetLoader Create(IAssetLoader fallbackAssetLoader)
+        => s_factory(fallbackAssetLoader);
+
+    /// <summary>
     /// Gets the fallback asset loader that is used when dynamic asset loading fails.
     /// </summary>
     public IAssetLoader FallbackAssetLoader => _assetLoader;
 
-    /// <inheritdoc/>
-    void IAssetLoader.SetDefaultAssembly(Assembly assembly)
-        => _assetLoader.SetDefaultAssembly(assembly);
-
-    /// <inheritdoc/>
-    public Assembly? GetAssembly(Uri uri, Uri? baseUri = null)
-        => _assetLoader.GetAssembly(uri, baseUri);
-
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IAssetLoader.Exists(Uri, Uri?)"/>
     public bool Exists(Uri uri, Uri? baseUri = null)
     {
         if (_assetLoader.Exists(uri, baseUri))
@@ -58,7 +66,7 @@ internal sealed class DynamicAssetLoader : IAssetLoader
         return false;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IAssetLoader.GetAssets(Uri, Uri?)"/>
     public IEnumerable<Uri> GetAssets(Uri uri, Uri? baseUri)
     {
         IEnumerable<Uri> assets = _assetLoader.GetAssets(uri, baseUri);
@@ -78,11 +86,11 @@ internal sealed class DynamicAssetLoader : IAssetLoader
         return assets;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IAssetLoader.Open(Uri, Uri?)"/>
     public Stream Open(Uri uri, Uri? baseUri = null)
         => OpenAndGetAssembly(uri, baseUri).stream;
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IAssetLoader.OpenAndGetAssembly(Uri, Uri?)"/>
     public (Stream stream, Assembly assembly) OpenAndGetAssembly(Uri uri, Uri? baseUri = null)
     {
         if (!TryGetAssetInfo(uri, baseUri, out AssetInfo? asset) || !_fileSystem.Exists(asset.Path))
@@ -114,7 +122,7 @@ internal sealed class DynamicAssetLoader : IAssetLoader
         if (absoluteUri.Scheme != UriHelper.AvaloniaResourceScheme)
             return false;
 
-        Assembly? assembly = GetAssembly(absoluteUri);
+        Assembly? assembly = _assetLoader.GetAssembly(absoluteUri);
         if (assembly is null)
             return false;
 
@@ -123,5 +131,123 @@ internal sealed class DynamicAssetLoader : IAssetLoader
 
         assetInfo = new(absoluteUri, assembly, rootPath);
         return true;
+    }
+}
+
+/// <summary>
+/// Provides a way to generate a subclass of <see cref="DynamicAssetLoader"/>
+/// that properly implements the <see cref="IAssetLoader"/> interface.
+/// </summary>
+file static class DynamicAssetLoaderBuilder
+{
+    /// <summary>
+    /// The module builder used to define dynamic types.
+    /// </summary>
+    private static readonly Lazy<ModuleBuilder> s_moduleBuilder = new(CreateModuleBuilder, isThreadSafe: true);
+
+    /// <summary>
+    /// Creates a delegate for constructing dynamic asset loader instances.
+    /// </summary>
+    /// <returns>A delegate that can be used to construct dynamic asset loader instances.</returns>
+    public static Func<IAssetLoader, IAssetLoader> CreateDynamicAssetLoaderFactory()
+    {
+        Type delegateType = typeof(Func<IAssetLoader, IAssetLoader>);
+        Type loaderType = CreateDynamicAssetLoaderType();
+        ConstructorInfo ctor = loaderType.GetConstructor([typeof(IAssetLoader)])!;
+
+        // public static DynamicAssetLoaderImpl CreateDynamicAssetLoaderImpl(IAssetLoader loader)
+        //     => new(loader);
+        DynamicMethod factory = new($"Create{loaderType.Name}", loaderType, [typeof(IAssetLoader)], true);
+        ILGenerator il = factory.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Ret);
+
+        return (Func<IAssetLoader, IAssetLoader>)factory.CreateDelegate(delegateType);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="DynamicAssetLoader"/> that implements <see cref="IAssetLoader"/>.
+    /// </summary>
+    /// <returns>
+    /// A <see cref="Type"/> representing the generated dynamic asset loader.
+    /// </returns>
+    public static Type CreateDynamicAssetLoaderType()
+    {
+        const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
+
+        ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
+        AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
+        Type parentType = typeof(DynamicAssetLoader);
+        FieldInfo fallbackAssetLoader = parentType
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+            .First(x => typeof(IAssetLoader).IsAssignableFrom(x.FieldType));
+
+        string fullName = $"{parentType.FullName}Impl";
+        Type? existingType = assemblyBuilder.GetType(fullName, throwOnError: false);
+        if (existingType is not null)
+            return existingType;
+
+        // public sealed class DynamicAssetLoaderImpl : DynamicAssetLoader, IAssetLoader
+        // {
+        TypeBuilder typeBuilder = moduleBuilder.DefineType(fullName, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class);
+        typeBuilder.SetParent(parentType);
+        typeBuilder.AddInterfaceImplementation(typeof(IAssetLoader));
+
+        //     public DynamicAssetLoaderImpl(IAssetLoader fallbackAssetLoader)
+        //         : base(fallbackAssetLoader)
+        //     {
+        //     }
+        ConstructorBuilder ctorBuilder = typeBuilder.DefineConstructor(
+            MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            CallingConventions.Standard | CallingConventions.HasThis,
+            [typeof(IAssetLoader)]
+        );
+        ILGenerator ctorIl = ctorBuilder.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Call, parentType.GetConstructor(InstanceMember, null, [typeof(IAssetLoader)], null)!);
+        ctorIl.Emit(OpCodes.Ret);
+
+        //     public IAssetLoader.<...>(...)
+        //     {
+        //         _assetLoader.<...>(...);
+        //     }
+        MethodInfo[] virtualMethods = typeof(IAssetLoader).GetMethods();
+        foreach (MethodInfo virtualMethod in virtualMethods)
+        {
+            Type[] parameterTypes = virtualMethod.GetParameterTypes();
+            MethodInfo? parentMethod = parentType.GetMethod(virtualMethod.Name, InstanceMember, null, parameterTypes, null);
+
+            MethodBuilder virtualMethodBuilder = typeBuilder.DefineMethod(
+                virtualMethod.Name, VirtualMethod,
+                virtualMethod.ReturnType, parameterTypes
+            );
+            ILGenerator virtualIl = virtualMethodBuilder.GetILGenerator();
+            virtualIl.Emit(OpCodes.Ldarg_0);
+            if (parentMethod is null)
+                virtualIl.Emit(OpCodes.Ldfld, fallbackAssetLoader);
+            for (int i = 1; i <= parameterTypes.Length; i++)
+                virtualIl.EmitLdarg(i);
+            virtualIl.EmitCall(parentMethod ?? virtualMethod);
+            virtualIl.Emit(OpCodes.Ret);
+        }
+
+        // }
+        return typeBuilder.CreateTypeInfo();
+    }
+
+    /// <summary>
+    /// Creates and returns a dynamic module builder.
+    /// </summary>
+    /// <returns>A new instance of <see cref="ModuleBuilder"/>.</returns>
+    private static ModuleBuilder CreateModuleBuilder()
+    {
+        string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
+        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        assemblyBuilder.AllowAccessTo(typeof(DynamicAssetLoader));
+
+        return assemblyBuilder.DefineDynamicModule(assemblyName);
     }
 }
