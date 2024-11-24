@@ -24,6 +24,11 @@ internal static class MethodInjector
     private static readonly Version s_runtimeVersionThatBrokePrepareMethod = new(7, 0, 0);
 
     /// <summary>
+    /// The .NET version that completely broke bytecode injections.
+    /// </summary>
+    private static readonly Version s_runtimeVersionThatBrokeBytecodeInjections = new(9, 0, 0);
+
+    /// <summary>
     /// Gets the type of the injection technique supported by the current runtime environment.
     /// </summary>
     public static InjectionType InjectionType { get; } = DetectSupportedInjectionType();
@@ -94,7 +99,7 @@ internal static class MethodInjector
             return InjectionType.Bytecode;
 
         bool isJitDisabled = Debugger.IsAttached || IsDotnetWatchAttached();
-        if (isJitDisabled)
+        if (Environment.Version < s_runtimeVersionThatBrokeBytecodeInjections && isJitDisabled)
             return InjectionType.Bytecode;
 
         return InjectionType.None;
