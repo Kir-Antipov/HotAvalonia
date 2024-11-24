@@ -10,6 +10,14 @@ namespace HotAvalonia;
 public static class AvaloniaHotReloadContext
 {
     /// <summary>
+    /// Creates a hot reload context for all assemblies within the current <see cref="AppDomain"/>.
+    /// </summary>
+    /// <returns>A hot reload context for the current application domain.</returns>
+    /// <inheritdoc cref="FromAppDomain(AppDomain)"/>
+    public static IHotReloadContext FromAppDomain()
+        => FromAppDomain(AppDomain.CurrentDomain);
+
+    /// <summary>
     /// Creates a hot reload context for all assemblies within the specified <see cref="AppDomain"/>.
     /// </summary>
     /// <remarks>
