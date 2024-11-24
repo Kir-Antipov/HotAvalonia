@@ -17,8 +17,8 @@
     <!-- However, for some ungodly reason, it includes its own polyfills for the `System.Memory` types, -->
     <!-- which clash with... the `System.Memory` types. So, for the project to build successfully, -->
     <!-- we **must** explicitly alias those. Sigh... -->
-    <PackageReference Include="MonoMod.Backports" Version="1.1.1" Aliases="MMB" />
-    <PackageReference Include="MonoMod.RuntimeDetour" Version="25.1.1" />
+    <PackageReference Include="MonoMod.Backports" Version="1.1.2" Aliases="MMB" />
+    <PackageReference Include="MonoMod.RuntimeDetour" Version="25.2.1" />
   </ItemGroup>
 
 </Project>
