@@ -1,4 +1,7 @@
 using System.Reflection;
+using Avalonia.Platform;
+using HotAvalonia.Assets;
+using HotAvalonia.DependencyInjection;
 using HotAvalonia.Helpers;
 using HotAvalonia.IO;
 
@@ -9,6 +12,22 @@ namespace HotAvalonia;
 /// </summary>
 public static class AvaloniaHotReloadContext
 {
+    /// <inheritdoc cref="ForAssets(IServiceProvider)"/>
+    public static IHotReloadContext ForAssets()
+        => ForAssets(AvaloniaServiceProvider.Current);
+
+    /// <summary>
+    /// Creates a hot reload context for Avalonia assets.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider defining <c>IAssetLoader</c>.</param>
+    /// <returns>A hot reload context for Avalonia assets.</returns>
+    public static IHotReloadContext ForAssets(IServiceProvider serviceProvider)
+    {
+        _ = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+
+        return new AvaloniaAssetsHotReloadContext(serviceProvider);
+    }
+
     /// <summary>
     /// Creates a hot reload context for all assemblies within the current <see cref="AppDomain"/>.
     /// </summary>
@@ -307,5 +326,64 @@ file sealed class AvaloniaProjectHotReloadContext : IHotReloadContext
     {
         string fileName = Path.GetFullPath(UriHelper.ResolvePathFromUri(rootPath, controlInfo.Uri));
         return new(controlInfo, fileName);
+    }
+}
+
+/// <summary>
+/// Manages the hot reload context for Avalonia assets.
+/// </summary>
+file sealed class AvaloniaAssetsHotReloadContext : IHotReloadContext
+{
+    /// <summary>
+    /// The asset manager.
+    /// </summary>
+    private readonly AvaloniaAssetManager _assetManager;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AvaloniaAssetsHotReloadContext"/> class.
+    /// </summary>
+    /// <param name="serviceProvider">
+    /// The service provider for resolving dependencies required by the asset manager.
+    /// </param>
+    public AvaloniaAssetsHotReloadContext(IServiceProvider serviceProvider)
+    {
+        _assetManager = new AvaloniaAssetManager(serviceProvider);
+    }
+
+    /// <inheritdoc/>
+    public bool IsHotReloadEnabled => _assetManager.AssetLoader is DynamicAssetLoader;
+
+    /// <inheritdoc/>
+    public void EnableHotReload()
+    {
+        LoggingHelper.Logger?.Log(
+            source: null,
+            "Enabling hot reload for assets..."
+        );
+
+        IAssetLoader? currentAssetLoader = _assetManager.AssetLoader;
+        if (currentAssetLoader is not null and not DynamicAssetLoader)
+            _assetManager.AssetLoader = new DynamicAssetLoader(currentAssetLoader);
+    }
+
+    /// <inheritdoc/>
+    public void DisableHotReload()
+    {
+        LoggingHelper.Logger?.Log(
+            source: null,
+            "Disabling hot reload for assets..."
+        );
+
+        IAssetLoader? currentAssetLoader = _assetManager.AssetLoader;
+        if (currentAssetLoader is DynamicAssetLoader dynamicAssetLoader)
+            _assetManager.AssetLoader = dynamicAssetLoader.FallbackAssetLoader;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        DisableHotReload();
+
+        _assetManager.Dispose();
     }
 }

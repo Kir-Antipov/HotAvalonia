@@ -73,7 +73,9 @@ namespace HotAvalonia
                 if (!string.IsNullOrEmpty(appFilePath))
                     AvaloniaProjectLocator.AddHint(app.GetType(), appFilePath);
 
-                context = AvaloniaHotReloadContext.FromAppDomain();
+                IHotReloadContext appDomainContext = AvaloniaHotReloadContext.FromAppDomain();
+                IHotReloadContext assetContext = AvaloniaHotReloadContext.ForAssets();
+                context = HotReloadContext.Combine(appDomainContext, assetContext);
                 s_apps.Add(app, context);
             }
 
