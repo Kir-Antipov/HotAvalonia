@@ -121,8 +121,8 @@ internal static class AssemblyHelper
     /// <param name="targetMethod">The target method whose referenced assemblies' access is needed.</param>
     public static void AllowAccessTo(this AssemblyBuilder sourceAssembly, MethodBase targetMethod)
     {
-        IEnumerable<Assembly> referencedAssemblies = targetMethod
-            .GetGenericArguments()
+        IEnumerable<Assembly> referencedAssemblies = ((targetMethod as MethodInfo)?
+            .GetGenericArguments() ?? Type.EmptyTypes)
             .Concat([targetMethod.DeclaringType, targetMethod.GetReturnType()])
             .Concat(targetMethod.GetParameters().Select(static x => x.ParameterType))
             .Select(static x => x.Assembly)
