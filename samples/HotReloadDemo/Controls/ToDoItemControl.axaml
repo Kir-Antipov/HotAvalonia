@@ -7,6 +7,9 @@
              x:DataType="m:ToDoItem"
              x:Class="HotReloadDemo.Controls.ToDoItemControl">
 
-  <CheckBox IsChecked="{Binding IsChecked}" Content="{Binding Description, Converter={StaticResource TitleCaseConverter}}" Margin="4"/>
+  <CheckBox IsChecked="{Binding IsChecked}"
+            Content="{Binding Description, Converter={StaticResource TitleCaseConverter}}"
+            Click="CheckBox_Click"
+            Margin="4"/>
 
 </UserControl>
