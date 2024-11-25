@@ -12,6 +12,36 @@ namespace HotAvalonia.Helpers;
 internal static class MethodHelper
 {
     /// <summary>
+    /// Creates a delegate of type <typeparamref name="TDelegate"/>
+    /// that represents the provided static or instance method.
+    /// </summary>
+    /// <typeparam name="TDelegate">The type of the delegate to create.</typeparam>
+    /// <inheritdoc cref="CreateUnsafeDelegate(MethodBase, Type, object?)"/>
+    public static TDelegate CreateUnsafeDelegate<TDelegate>(this MethodBase method, object? target = null)
+        where TDelegate : Delegate
+        => (TDelegate)CreateUnsafeDelegate(method, typeof(TDelegate), target);
+
+    /// <summary>
+    /// Creates a delegate of the specified type that represents
+    /// the provided static or instance method.
+    /// </summary>
+    /// <remarks>This method does not perform any safety checks.</remarks>
+    /// <param name="method">The method the delegate is to represent.</param>
+    /// <param name="delegateType">The <see cref="Type"/> of delegate to create.</param>
+    /// <param name="target">
+    /// The object to which the delegate is bound, or
+    /// <c>null</c> to treat method as <c>static</c>.
+    /// </param>
+    /// <returns>A delegate of the specified type that represents the provided method.</returns>
+    public static Delegate CreateUnsafeDelegate(this MethodBase method, Type delegateType, object? target = null)
+    {
+        RuntimeMethodHandle handle = method.MethodHandle;
+        RuntimeHelpers.PrepareMethod(handle);
+        nint ptr = handle.GetFunctionPointer();
+        return (Delegate)Activator.CreateInstance(delegateType, target, ptr)!;
+    }
+
+    /// <summary>
     /// Gets the type of the instance for instance methods or <c>null</c> for static methods.
     /// </summary>
     /// <param name="method">The method for which to get the instance type.</param>
