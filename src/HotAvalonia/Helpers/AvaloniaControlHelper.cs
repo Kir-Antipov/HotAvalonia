@@ -2,6 +2,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.XamlIl.Runtime;
 using Avalonia.Styling;
@@ -18,6 +20,11 @@ internal static class AvaloniaControlHelper
     /// The `_stylesApplied` field of the <see cref="StyledElement"/> class.
     /// </summary>
     private static readonly FieldInfo? s_stylesAppliedField;
+
+    /// <summary>
+    /// The `InheritanceParent` property of the <see cref="AvaloniaObject"/> class.
+    /// </summary>
+    private static readonly PropertyInfo? s_inheritanceParentProperty;
 
     /// <summary>
     /// The `Type` property of the <c>XamlX.IL.SreTypeSystem.SreType</c> class.
@@ -37,16 +44,18 @@ internal static class AvaloniaControlHelper
     /// </summary>
     static AvaloniaControlHelper()
     {
-        FieldInfo? stylesAppliedField = typeof(StyledElement).GetField("_stylesApplied", BindingFlags.NonPublic | BindingFlags.Instance);
+        const BindingFlags InstanceMember = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+        FieldInfo? stylesAppliedField = typeof(StyledElement).GetField("_stylesApplied", InstanceMember);
         s_stylesAppliedField = stylesAppliedField?.FieldType == typeof(bool) ? stylesAppliedField : null;
+        s_inheritanceParentProperty = typeof(AvaloniaObject).GetProperty("InheritanceParent", InstanceMember);
 
         Assembly xamlLoaderAssembly = typeof(AvaloniaRuntimeXamlLoader).Assembly;
         Type? sreType = xamlLoaderAssembly.GetType("XamlX.IL.SreTypeSystem+SreType");
         s_xamlTypeProperty = sreType?.GetProperty("Type");
 
-        BindingFlags ctorFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         Type? sreMethodBuilder = xamlLoaderAssembly.GetType("XamlX.IL.SreTypeSystem+SreTypeBuilder+SreMethodBuilder");
-        ConstructorInfo? sreMethodBuilderCtor = sreMethodBuilder?.GetConstructors(ctorFlags).FirstOrDefault(x => x.GetParameters().Length > 1);
+        ConstructorInfo? sreMethodBuilderCtor = sreMethodBuilder?.GetConstructors(InstanceMember).FirstOrDefault(x => x.GetParameters().Length > 1);
         if (sreMethodBuilderCtor is not null)
             s_sreMethodBuilderInjection = CallbackInjector.Inject(sreMethodBuilderCtor, OnNewSreMethodBuilder);
     }
@@ -105,8 +114,9 @@ internal static class AvaloniaControlHelper
         string xamlWithDynamicComponents = MakeStaticComponentsDynamic(xaml);
         HashSet<MethodInfo> oldPopulateMethods = new(AvaloniaRuntimeXamlScanner.FindDynamicPopulateMethods(uri));
 
-        Clear(control);
+        Reset(control, out Action restore);
         object loadedControl = AvaloniaRuntimeXamlLoader.Load(xamlWithDynamicComponents, null, control, uri, designMode: false);
+        restore();
 
         compiledPopulateMethod = AvaloniaRuntimeXamlScanner
                     .FindDynamicPopulateMethods(uri)
@@ -146,8 +156,9 @@ internal static class AvaloniaControlHelper
             control,
         };
 
-        Clear(control);
+        Reset(control, out Action restore);
         populate.Invoke(null, args);
+        restore();
     }
 
     /// <summary>
@@ -204,6 +215,55 @@ internal static class AvaloniaControlHelper
             avaloniaControl.Resources.Clear();
             avaloniaControl.Styles.Clear();
         }
+    }
+
+    /// <summary>
+    /// Fully resets the state of an Avalonia control and
+    /// provides a callback to restore its original state.
+    /// </summary>
+    /// <param name="control">The control to reset.</param>
+    /// <param name="restore">When this method returns, contains a callback to restore the control's original state.</param>
+    public static void Reset(object? control, out Action restore)
+    {
+        Detach(control, out ILogical? logicalParent, out AvaloniaObject? inheritanceParent);
+        Clear(control);
+        restore = () => Attach(control, logicalParent, inheritanceParent);
+    }
+
+    /// <summary>
+    /// Detaches an Avalonia control from its logical and inheritance parents.
+    /// </summary>
+    /// <param name="control">The control to detach.</param>
+    /// <param name="logicalParent">
+    /// When this method returns, contains the control's logical parent, or <c>null</c> if it has none.
+    /// </param>
+    /// <param name="inheritanceParent">
+    /// When this method returns, contains the control's inheritance parent, or <c>null</c> if it has none.
+    /// </param>
+    private static void Detach(object? control, out ILogical? logicalParent, out AvaloniaObject? inheritanceParent)
+    {
+        logicalParent = (control as ILogical)?.GetLogicalParent();
+        inheritanceParent = control is AvaloniaObject
+            ? s_inheritanceParentProperty?.GetValue(control) as AvaloniaObject
+            : null;
+
+        (control as ISetLogicalParent)?.SetParent(null);
+        (control as ISetInheritanceParent)?.SetParent(null);
+    }
+
+    /// <summary>
+    /// Attaches an Avalonia control to the specified logical and inheritance parents.
+    /// </summary>
+    /// <param name="control">The control to attach.</param>
+    /// <param name="logicalParent">The logical parent to attach the control to.</param>
+    /// <param name="inheritanceParent">The inheritance parent to attach the control to.</param>
+    private static void Attach(object? control, ILogical? logicalParent, AvaloniaObject? inheritanceParent)
+    {
+        if (logicalParent is not null && control is ISetLogicalParent logical)
+            logical.SetParent(logicalParent);
+
+        if (inheritanceParent is not null && control is ISetInheritanceParent inheritance)
+            inheritance.SetParent(inheritanceParent);
     }
 
     /// <summary>
