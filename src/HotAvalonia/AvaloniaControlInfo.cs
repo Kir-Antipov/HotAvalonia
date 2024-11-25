@@ -31,23 +31,23 @@ public sealed class AvaloniaControlInfo
     private readonly MethodInfo _populate;
 
     /// <summary>
-    /// The named references within the control's scope.
-    /// </summary>
-    private readonly AvaloniaNamedControlReference[] _namedReferences;
-
-    /// <summary>
     /// The field responsible for overriding the populate logic of the control.
     /// </summary>
     private readonly FieldInfo? _populateOverride;
 
-    /// <inheritdoc cref="AvaloniaControlInfo(Uri, MethodBase, MethodInfo, FieldInfo?, IEnumerable{AvaloniaNamedControlReference}?)"/>
+    /// <summary>
+    /// A delegate that defines a refresh action for the control.
+    /// </summary>
+    private readonly Action<object>? _refresh;
+
+    /// <inheritdoc cref="AvaloniaControlInfo(Uri, MethodBase, MethodInfo, FieldInfo?, Action{object}?)"/>
     public AvaloniaControlInfo(
         string uri,
         MethodBase build,
         MethodInfo populate,
         FieldInfo? populateOverride = null,
-        IEnumerable<AvaloniaNamedControlReference>? namedReferences = null)
-        : this(new Uri(uri), build, populate, populateOverride, namedReferences)
+        Action<object>? refresh = null)
+        : this(new Uri(uri), build, populate, populateOverride, refresh)
     {
     }
 
@@ -58,13 +58,13 @@ public sealed class AvaloniaControlInfo
     /// <param name="build">The method used to build the control instance.</param>
     /// <param name="populate">The method used to populate the control instance.</param>
     /// <param name="populateOverride">The field responsible for overriding the populate logic of the control.</param>
-    /// <param name="namedReferences">The named references within the control's scope.</param>
+    /// <param name="refresh">A delegate that defines a refresh action for the control.</param>
     public AvaloniaControlInfo(
         Uri uri,
         MethodBase build,
         MethodInfo populate,
         FieldInfo? populateOverride = null,
-        IEnumerable<AvaloniaNamedControlReference>? namedReferences = null)
+        Action<object>? refresh = null)
     {
         _ = uri ?? throw new ArgumentNullException(nameof(uri));
         _ = build ?? throw new ArgumentNullException(nameof(build));
@@ -83,7 +83,7 @@ public sealed class AvaloniaControlInfo
         _build = build;
         _populate = populate;
         _populateOverride = populateOverride;
-        _namedReferences = namedReferences?.ToArray() ?? Array.Empty<AvaloniaNamedControlReference>();
+        _refresh = refresh;
 
         _controlType = build is MethodInfo buildInfo ? buildInfo.ReturnType : build.DeclaringType;
     }
@@ -112,11 +112,6 @@ public sealed class AvaloniaControlInfo
     /// The field responsible for overriding the populate logic of the control.
     /// </summary>
     internal FieldInfo? PopulateOverrideProperty => _populateOverride;
-
-    /// <summary>
-    /// The named references within the control's scope.
-    /// </summary>
-    public IEnumerable<AvaloniaNamedControlReference> NamedReferences => _namedReferences;
 
     /// <summary>
     /// Loads an Avalonia control from XAML markup and initializes it.
@@ -191,9 +186,5 @@ public sealed class AvaloniaControlInfo
     /// the population routine, so we need to sort those out manually.
     /// </remarks>
     /// <param name="control">The control to refresh.</param>
-    private void Refresh(object control)
-    {
-        foreach (AvaloniaNamedControlReference namedReference in _namedReferences)
-            namedReference.Refresh(control);
-    }
+    public void Refresh(object control) => _refresh?.Invoke(control);
 }

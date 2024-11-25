@@ -284,11 +284,11 @@ public static class AvaloniaRuntimeXamlScanner
 
             MethodInfo? populateMethod = FindPopulateMethod(method);
             FieldInfo? populateOverrideField = FindPopulateOverrideField(method);
-            IEnumerable<AvaloniaNamedControlReference> namedReferences = FindAvaloniaNamedControlReferences(method);
+            Action<object> refresh = GetControlRefreshCallback(method);
             if (populateMethod is null)
                 continue;
 
-            yield return new(uri, method, populateMethod, populateOverrideField, namedReferences);
+            yield return new(uri, method, populateMethod, populateOverrideField, refresh);
             (str, uri) = (null, null);
         }
     }
@@ -435,6 +435,63 @@ public static class AvaloniaRuntimeXamlScanner
 
             yield return new(name, controlType, field);
         }
+    }
+
+    /// <param name="buildMethod">The build method associated with the control.</param>
+    /// <inheritdoc cref="FindAvaloniaHotReloadControlCallbacks"/>
+    private static IEnumerable<MethodInfo> FindAvaloniaHotReloadCallbacks(MethodBase buildMethod)
+    {
+        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
+
+        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
+            return Array.Empty<MethodInfo>();
+
+        return FindAvaloniaHotReloadControlCallbacks(declaringType);
+    }
+
+    /// <summary>
+    /// Finds all parameterless instance methods within the specified control
+    /// that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
+    /// </summary>
+    /// <param name="userControlType">The type to inspect for hot reload callback methods.</param>
+    /// <returns>
+    /// A collection of <see cref="MethodInfo"/> representing all parameterless instance methods
+    /// within the provided control that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
+    /// </returns>
+    private static IEnumerable<MethodInfo> FindAvaloniaHotReloadControlCallbacks(Type userControlType)
+    {
+        const string AvaloniaHotReloadAttributeName = "HotAvalonia.AvaloniaHotReloadAttribute";
+
+        _ = userControlType ?? throw new ArgumentNullException(nameof(userControlType));
+
+        return userControlType
+            .GetMethods(InstanceMember)
+            .Where(static x => x.GetParameters().Length == 0)
+            .Where(static x => x.GetCustomAttributes(inherit: true)
+                .Any(static y => y?.GetType().FullName == AvaloniaHotReloadAttributeName));
+    }
+
+    /// <summary>
+    /// Constructs a combined refresh callback for a control, aggregating
+    /// hot reload methods and named control refresh actions.
+    /// </summary>
+    /// <param name="buildMethod">The build method associated with the control.</param>
+    /// <returns>
+    /// A delegate that, when invoked, executes all associated refresh actions for
+    /// the control, including hot reload callbacks and named control refresh methods.
+    /// </returns>
+    private static Action<object> GetControlRefreshCallback(MethodBase buildMethod)
+    {
+        Action<object>[] callbacks = FindAvaloniaNamedControlReferences(buildMethod)
+            .Select(static x => (Action<object>)x.Refresh)
+            .Concat(FindAvaloniaHotReloadCallbacks(buildMethod)
+            .Select(static x => x.CreateUnsafeDelegate<Action<object>>()))
+            .ToArray();
+
+        if (callbacks.Length == 0)
+            return static x => { };
+
+        return (Action<object>)Delegate.Combine(callbacks);
     }
 
     /// <summary>
