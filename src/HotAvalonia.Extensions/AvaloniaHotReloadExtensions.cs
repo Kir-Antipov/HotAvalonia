@@ -32,6 +32,42 @@
 #pragma warning disable
 #nullable enable
 
+namespace HotAvalonia
+{
+    /// <summary>
+    /// Indicates that the decorated method should be called whenever the associated Avalonia control is hot reloaded.
+    /// </summary>
+    /// <remarks>
+    /// This attribute is intended to be applied to parameterless instance methods of Avalonia controls.
+    /// When the control is hot reloaded, the method marked with this attribute is executed.
+    /// This can be used to refresh or update the control's state in response to hot reload events.
+    ///
+    /// <br/><br/>
+    ///
+    /// The method must meet the following requirements:
+    /// <list type="bullet">
+    ///   <item>It must be an instance method (i.e., not static).</item>
+    ///   <item>It must not have any parameters.</item>
+    /// </list>
+    ///
+    /// Example usage:
+    /// <code>
+    /// [AvaloniaHotReload]
+    /// private void Initialize()
+    /// {
+    ///     // Code to initialize or refresh
+    ///     // the control during hot reload.
+    /// }
+    /// </code>
+    /// </remarks>
+    [global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+    [global::System.Diagnostics.Conditional("ENABLE_XAML_HOT_RELOAD")]
+    [global::System.AttributeUsage(global::System.AttributeTargets.Method)]
+    internal sealed class AvaloniaHotReloadAttribute : global::System.Attribute
+    {
+    }
+}
+
 #if ENABLE_XAML_HOT_RELOAD && !DISABLE_XAML_HOT_RELOAD
 namespace HotAvalonia
 {
