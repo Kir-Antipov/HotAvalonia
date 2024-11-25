@@ -15,6 +15,7 @@
   <ItemGroup>
     <None Include="HotAvalonia.Extensions.props" PackagePath="build" Pack="true" />
     <None Include="AvaloniaHotReloadExtensions.cs" PackagePath="contentFiles/cs/any/" Pack="true" BuildAction="Compile" />
+    <None Include="AvaloniaHotReloadExtensions.vb" PackagePath="contentFiles/vb/any/" Pack="true" BuildAction="Compile" />
   </ItemGroup>
 
   <ItemGroup>
