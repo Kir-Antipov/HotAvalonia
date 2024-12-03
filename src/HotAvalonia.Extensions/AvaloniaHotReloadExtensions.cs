@@ -147,6 +147,7 @@ namespace HotAvalonia
 #else
 namespace HotAvalonia
 {
+    using global::System;
     using global::System.Diagnostics;
     using global::System.Diagnostics.CodeAnalysis;
     using global::System.Reflection;
