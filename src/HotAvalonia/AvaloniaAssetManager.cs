@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using HotAvalonia.Assets;
 using HotAvalonia.DependencyInjection;
+using HotAvalonia.Helpers;
 using HotAvalonia.Reflection.Inject;
 
 namespace HotAvalonia;
@@ -45,34 +46,13 @@ public sealed class AvaloniaAssetManager : IDisposable
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
-        Type[] converterParameters = [typeof(ITypeDescriptorContext), typeof(CultureInfo), typeof(object)];
-        MethodInfo toIcon = typeof(IconTypeConverter).GetMethod(nameof(IconTypeConverter.ConvertFrom), converterParameters)!;
-        MethodInfo toBitmap = typeof(BitmapTypeConverter).GetMethod(nameof(BitmapTypeConverter.ConvertFrom), converterParameters)!;
-
-        _injections =
-        [
-            // Ideally, we would inject into something like
-            // `Avalonia.PropertyStore.EffectiveValue`1.SetLocalValueAndRaise`
-            // to catch all these scenarios, including custom ones, automatically.
-            // However, generic injections are quite flaky to say the least,
-            // so it's better to avoid them if we want predictable results.
-            //
-            // Perhaps we could add automatic detection of similar cases via reflection?
-            ..new (Type Type, string Name, AvaloniaProperty Property)[]
-            {
-                (typeof(Window), nameof(Window.Icon), Window.IconProperty),
-                (typeof(Image), nameof(Image.Source), Image.SourceProperty),
-                (typeof(ImageBrush), nameof(ImageBrush.Source), ImageBrush.SourceProperty),
-                (typeof(CroppedBitmap), nameof(CroppedBitmap.Source), CroppedBitmap.SourceProperty),
-                (typeof(ImageDrawing), nameof(ImageDrawing.ImageSource), ImageDrawing.ImageSourceProperty),
-            }.Select(static x => CallbackInjector.Inject(
-                x.Type.GetProperty(x.Name).SetMethod,
-                ([Caller] AvaloniaObject obj, object value) => TryBindDynamicAsset(obj, x.Property, value))
-            ),
-
-            CallbackInjector.Inject(toIcon, TryLoadDynamicAsset<WindowIcon, IconTypeConverter>),
-            CallbackInjector.Inject(toBitmap, TryLoadDynamicAsset<Bitmap, BitmapTypeConverter>),
-        ];
+        if (!TryInjectAssetCallbacks(out _injections))
+        {
+            LoggingHelper.Logger?.Log(
+                this,
+                "Failed to subscribe to asset loading events. Icons and images won't be reloaded upon file changes."
+            );
+        }
     }
 
     /// <summary>
@@ -146,5 +126,55 @@ public sealed class AvaloniaAssetManager : IDisposable
     {
         if (value is IObservable<object> observableValue)
             obj.Bind(property, observableValue);
+    }
+
+    /// <summary>
+    /// Attempts to inject asset-related callbacks for various Avalonia control properties.
+    /// </summary>
+    /// <param name="injections">
+    /// When this method returns, contains an array of <see cref="IInjection"/> instances
+    /// for each successful callback injection.
+    /// </param>
+    /// <returns>
+    /// <c>true</c> if the callback injections were successful;
+    /// otherwise, <c>false</c>.
+    /// </returns>
+    private static bool TryInjectAssetCallbacks(out IInjection[] injections)
+    {
+        if (!CallbackInjector.SupportsOptimizedMethods)
+        {
+            injections = [];
+            return false;
+        }
+
+        Type[] converterParameters = [typeof(ITypeDescriptorContext), typeof(CultureInfo), typeof(object)];
+        MethodInfo toIcon = typeof(IconTypeConverter).GetMethod(nameof(IconTypeConverter.ConvertFrom), converterParameters)!;
+        MethodInfo toBitmap = typeof(BitmapTypeConverter).GetMethod(nameof(BitmapTypeConverter.ConvertFrom), converterParameters)!;
+
+        injections =
+        [
+            // Ideally, we would inject into something like
+            // `Avalonia.PropertyStore.EffectiveValue`1.SetLocalValueAndRaise`
+            // to catch all these scenarios, including custom ones, automatically.
+            // However, generic injections are quite flaky to say the least,
+            // so it's better to avoid them if we want predictable results.
+            //
+            // Perhaps we could add automatic detection of similar cases via reflection?
+            ..new (Type Type, string Name, AvaloniaProperty Property)[]
+            {
+                (typeof(Window), nameof(Window.Icon), Window.IconProperty),
+                (typeof(Image), nameof(Image.Source), Image.SourceProperty),
+                (typeof(ImageBrush), nameof(ImageBrush.Source), ImageBrush.SourceProperty),
+                (typeof(CroppedBitmap), nameof(CroppedBitmap.Source), CroppedBitmap.SourceProperty),
+                (typeof(ImageDrawing), nameof(ImageDrawing.ImageSource), ImageDrawing.ImageSourceProperty),
+            }.Select(static x => CallbackInjector.Inject(
+                x.Type.GetProperty(x.Name).SetMethod,
+                ([Caller] AvaloniaObject obj, object value) => TryBindDynamicAsset(obj, x.Property, value))
+            ),
+
+            CallbackInjector.Inject(toIcon, TryLoadDynamicAsset<WindowIcon, IconTypeConverter>),
+            CallbackInjector.Inject(toBitmap, TryLoadDynamicAsset<Bitmap, BitmapTypeConverter>),
+        ];
+        return true;
     }
 }

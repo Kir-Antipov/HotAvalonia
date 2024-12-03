@@ -39,6 +39,11 @@ internal static class MethodInjector
     public static bool IsSupported => InjectionType is not InjectionType.None;
 
     /// <summary>
+    /// Indicates whether method injection is supported in optimized assemblies.
+    /// </summary>
+    public static bool SupportsOptimizedMethods => InjectionType is InjectionType.Native;
+
+    /// <summary>
     /// Injects a replacement method implementation for the specified source method.
     /// </summary>
     /// <param name="source">The method to be replaced.</param>

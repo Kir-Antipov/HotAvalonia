@@ -56,7 +56,7 @@ internal static class AvaloniaControlHelper
 
         Type? sreMethodBuilder = xamlLoaderAssembly.GetType("XamlX.IL.SreTypeSystem+SreTypeBuilder+SreMethodBuilder");
         ConstructorInfo? sreMethodBuilderCtor = sreMethodBuilder?.GetConstructors(InstanceMember).FirstOrDefault(x => x.GetParameters().Length > 1);
-        if (sreMethodBuilderCtor is not null)
+        if (sreMethodBuilderCtor is not null && CallbackInjector.SupportsOptimizedMethods)
             s_sreMethodBuilderInjection = CallbackInjector.Inject(sreMethodBuilderCtor, OnNewSreMethodBuilder);
     }
 

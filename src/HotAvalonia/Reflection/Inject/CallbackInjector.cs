@@ -20,6 +20,11 @@ internal static class CallbackInjector
     public static bool IsSupported => MethodInjector.IsSupported;
 
     /// <summary>
+    /// Indicates whether callback injection is supported in optimized assemblies.
+    /// </summary>
+    public static bool SupportsOptimizedMethods => MethodInjector.SupportsOptimizedMethods;
+
+    /// <summary>
     /// Throws an exception if callback injection is not supported in the current runtime environment.
     /// </summary>
     /// <exception cref="InvalidOperationException"/>
