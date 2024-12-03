@@ -296,7 +296,7 @@ file static class DynamicAssetBuilder
 
         // public static TAsset Create{TAsset}(...args)
         //     => new(...args);
-        DynamicMethod factory = new($"Create{assetType.Name}", assetType, parameterTypes, true);
+        using IDisposable context = MethodHelper.DefineDynamicMethod($"Create{assetType.Name}", assetType, parameterTypes, out DynamicMethod factory);
         ILGenerator il = factory.GetILGenerator();
 
         for (int i = 0; i < parameterTypes.Length; i++)
@@ -323,7 +323,7 @@ file static class DynamicAssetBuilder
 
         // public static void Copy{TAsset}(TAsset from, TAsset to)
         // {
-        DynamicMethod copier = new($"Copy{assetType.Name}", typeof(void), [assetType, assetType], true);
+        using IDisposable context = MethodHelper.DefineDynamicMethod($"Copy{assetType.Name}", typeof(void), [assetType, assetType], out DynamicMethod copier);
         ILGenerator il = copier.GetILGenerator();
 
         //     if (to.fieldN is IDisposable)
@@ -365,7 +365,7 @@ file static class DynamicAssetBuilder
     private static ModuleBuilder CreateModuleBuilder()
     {
         string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
         assemblyBuilder.AllowAccessTo(typeof(DynamicAsset<>));
 
         return assemblyBuilder.DefineDynamicModule(assemblyName);

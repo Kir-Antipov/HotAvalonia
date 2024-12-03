@@ -35,6 +35,12 @@ internal static class AssemblyHelper
     );
 
     /// <summary>
+    /// A delegate function used to temporarily allow dynamic code generation
+    /// even when <c>RuntimeFeature.IsDynamicCodeSupported</c> is <c>false</c>.
+    /// </summary>
+    private static readonly Func<IDisposable> s_forceAllowDynamicCode = CreateForceAllowDynamicCodeDelegate();
+
+    /// <summary>
     /// Retrieves all loadable types from a given assembly.
     /// </summary>
     /// <param name="assembly">The assembly from which to retrieve types.</param>
@@ -133,6 +139,62 @@ internal static class AssemblyHelper
     }
 
     /// <summary>
+    /// Defines a new dynamic assembly with the specified name and temporarily allows dynamic code generation.
+    /// </summary>
+    /// <param name="assemblyName">The name of the dynamic assembly to define.</param>
+    /// <param name="assembly">The resulting <see cref="AssemblyBuilder"/> instance.</param>
+    /// <returns>
+    /// An <see cref="IDisposable"/> object that, when disposed, will revert the environment
+    /// to its previous state regarding support for dynamic code generation.
+    /// </returns>
+    public static IDisposable DefineDynamicAssembly(string assemblyName, out AssemblyBuilder assembly)
+    {
+        IDisposable dynamicCodeContext = ForceAllowDynamicCode();
+        assembly = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        return dynamicCodeContext;
+    }
+
+    /// <summary>
+    /// Temporarily allows dynamic code generation even when <c>RuntimeFeature.IsDynamicCodeSupported</c> is <c>false</c>.
+    /// </summary>
+    /// <returns>
+    /// An <see cref="IDisposable"/> object that, when disposed, will revert the environment
+    /// to its previous state regarding support for dynamic code generation.
+    /// </returns>
+    /// <remarks>
+    /// This is particularly useful in scenarios where the runtime can support emitting dynamic code,
+    /// but a feature switch or configuration has disabled it (e.g., <c>PublishAot=true</c> during debugging).
+    /// </remarks>
+    public static IDisposable ForceAllowDynamicCode()
+        => s_forceAllowDynamicCode();
+
+    /// <summary>
+    /// Creates a delegate to the internal <c>ForceAllowDynamicCode</c> method,
+    /// enabling the temporary allowance of dynamic code generation.
+    /// </summary>
+    /// <returns>
+    /// A delegate that can be invoked to allow dynamic code generation.
+    /// </returns>
+    private static Func<IDisposable> CreateForceAllowDynamicCodeDelegate()
+    {
+        MethodInfo? forceAllowDynamicCode = typeof(AssemblyBuilder).GetMethod(
+            nameof(ForceAllowDynamicCode),
+            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static,
+            null,
+            Type.EmptyTypes,
+            null
+        );
+
+        if (forceAllowDynamicCode is not null && typeof(IDisposable).IsAssignableFrom(forceAllowDynamicCode.ReturnType))
+            return (Func<IDisposable>)forceAllowDynamicCode.CreateDelegate(typeof(Func<IDisposable>));
+
+        // I'm too lazy to create a new type for the stub, so just use an empty
+        // `MemoryStream` that can be disposed of an infinite number of times.
+        IDisposable disposableInstance = new MemoryStream(Array.Empty<byte>());
+        return () => disposableInstance;
+    }
+
+    /// <summary>
     /// Creates a dynamic type that represents the <c>System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute</c>.
     /// </summary>
     /// <remarks>
@@ -149,7 +211,7 @@ internal static class AssemblyHelper
         const string moduleName = "IgnoresAccessChecksToAttributeDefinition";
 
         string assemblyName = $"{moduleName}+{Guid.NewGuid():N}";
-        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        using IDisposable context = DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
         ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(moduleName);
 
         TypeBuilder attributeBuilder = moduleBuilder.DefineType(attributeName, TypeAttributes.Class | TypeAttributes.Public, typeof(Attribute));

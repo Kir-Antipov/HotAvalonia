@@ -309,7 +309,7 @@ internal static class CallbackInjector
     private static ModuleBuilder CreateModuleBuilder()
     {
         string assemblyName = $"__Reflection.Inject.Dynamic+{Guid.NewGuid():N}";
-        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
         assemblyBuilder.AllowAccessTo(typeof(IInjection));
 
         return assemblyBuilder.DefineDynamicModule(assemblyName);

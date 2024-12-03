@@ -180,7 +180,7 @@ file static class DynamicAssetTypeConverterBuilder
     private static ModuleBuilder CreateModuleBuilder()
     {
         string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
         assemblyBuilder.AllowAccessTo(typeof(DynamicAssetTypeConverter<>));
 
         return assemblyBuilder.DefineDynamicModule(assemblyName);

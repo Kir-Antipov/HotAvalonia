@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Mono.Cecil;
@@ -39,6 +40,25 @@ internal static class MethodHelper
         RuntimeHelpers.PrepareMethod(handle);
         nint ptr = handle.GetFunctionPointer();
         return (Delegate)Activator.CreateInstance(delegateType, target, ptr)!;
+    }
+
+    /// <summary>
+    /// Defines a new dynamic method with the specified name, return type, and parameter types,
+    /// and temporarily allows dynamic code generation.
+    /// </summary>
+    /// <param name="name">The name of the dynamic method to define.</param>
+    /// <param name="returnType">The return type of the dynamic method.</param>
+    /// <param name="parameterTypes">An array of <see cref="Type"/> representing the parameter types of the dynamic method.</param>
+    /// <param name="method">The resulting <see cref="DynamicMethod"/> instance.</param>
+    /// <returns>
+    /// An <see cref="IDisposable"/> object that, when disposed, will revert the environment
+    /// to its previous state regarding support for dynamic code generation.
+    /// </returns>
+    public static IDisposable DefineDynamicMethod(string name, Type returnType, Type[] parameterTypes, out DynamicMethod method)
+    {
+        IDisposable dynamicCodeContext = AssemblyHelper.ForceAllowDynamicCode();
+        method = new(name, returnType, parameterTypes, true);
+        return dynamicCodeContext;
     }
 
     /// <summary>

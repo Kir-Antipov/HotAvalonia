@@ -157,7 +157,7 @@ file static class DynamicAssetLoaderBuilder
 
         // public static DynamicAssetLoaderImpl CreateDynamicAssetLoaderImpl(IAssetLoader loader)
         //     => new(loader);
-        DynamicMethod factory = new($"Create{loaderType.Name}", loaderType, [typeof(IAssetLoader)], true);
+        using IDisposable context = MethodHelper.DefineDynamicMethod($"Create{loaderType.Name}", loaderType, [typeof(IAssetLoader)], out DynamicMethod factory);
         ILGenerator il = factory.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, ctor);
@@ -245,7 +245,7 @@ file static class DynamicAssetLoaderBuilder
     private static ModuleBuilder CreateModuleBuilder()
     {
         string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
         assemblyBuilder.AllowAccessTo(typeof(DynamicAssetLoader));
 
         return assemblyBuilder.DefineDynamicModule(assemblyName);

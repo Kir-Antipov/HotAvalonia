@@ -85,6 +85,9 @@ internal static class MethodInjector
     {
         try
         {
+            // Enable dynamic code generation, which is required for MonoMod to function.
+            _ = AssemblyHelper.ForceAllowDynamicCode();
+
             // `PlatformTriple.Current` may throw exceptions such as:
             //  - NotImplementedException
             //  - PlatformNotSupportedException
@@ -123,6 +126,11 @@ file sealed class NativeInjection : IInjection
     /// <param name="replacement">The replacement method implementation.</param>
     public NativeInjection(MethodBase source, MethodInfo replacement)
     {
+        // Enable dynamic code generation, which is required for MonoMod to function.
+        // Note that we cannot enable it forcefully just once and call it a day,
+        // because this only affects the current thread.
+        _ = AssemblyHelper.ForceAllowDynamicCode();
+
         _hook = new(source, replacement, applyByDefault: true);
     }
 
