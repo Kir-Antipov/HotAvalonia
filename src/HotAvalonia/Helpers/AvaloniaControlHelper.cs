@@ -95,21 +95,30 @@ internal static class AvaloniaControlHelper
             assembly.AllowAccessTo(parameterType);
     }
 
+    /// <inheritdoc cref="Load(string, Uri, object?, Type?, out MethodInfo?)"/>
+    public static object Load(string xaml, Uri uri, object? control, out MethodInfo? compiledPopulateMethod)
+        => Load(xaml, uri, control, null, out compiledPopulateMethod);
+
     /// <summary>
     /// Loads an Avalonia control from XAML markup and initializes it.
     /// </summary>
     /// <param name="xaml">The XAML markup to load the control from.</param>
     /// <param name="uri">The URI that identifies the XAML source.</param>
     /// <param name="control">The optional control object to be populated.</param>
+    /// <param name="controlType">The type of the control.</param>
     /// <param name="compiledPopulateMethod">The newly compiled populate method, if the compilation was successful.</param>
     /// <returns>An object representing the loaded Avalonia control.</returns>
     /// <remarks>
     /// This method replaces static resources with their dynamic counterparts before loading the control.
     /// </remarks>
-    public static object Load(string xaml, Uri uri, object? control, out MethodInfo? compiledPopulateMethod)
+    public static object Load(string xaml, Uri uri, object? control, Type? controlType, out MethodInfo? compiledPopulateMethod)
     {
         _ = xaml ?? throw new ArgumentNullException(nameof(xaml));
         _ = uri ?? throw new ArgumentNullException(nameof(uri));
+
+        controlType ??= control?.GetType();
+        if (controlType is not null && AvaloniaRuntimeXamlScanner.DynamicXamlAssembly is AssemblyBuilder xamlAssembly)
+            xamlAssembly.AllowAccessTo(controlType);
 
         string xamlWithDynamicComponents = MakeStaticComponentsDynamic(xaml);
         HashSet<MethodInfo> oldPopulateMethods = new(AvaloniaRuntimeXamlScanner.FindDynamicPopulateMethods(uri));

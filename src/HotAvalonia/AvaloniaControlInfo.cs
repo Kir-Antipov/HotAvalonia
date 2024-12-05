@@ -121,7 +121,7 @@ public sealed class AvaloniaControlInfo
     /// <param name="compiledPopulateMethod">The newly compiled populate method, if the compilation was successful.</param>
     public object? Load(string xaml, object? control, out MethodInfo? compiledPopulateMethod)
     {
-        control = AvaloniaControlHelper.Load(xaml, _uri, control, out compiledPopulateMethod);
+        control = AvaloniaControlHelper.Load(xaml, _uri, control, _controlType, out compiledPopulateMethod);
         if (control is not null)
             Refresh(control);
 
