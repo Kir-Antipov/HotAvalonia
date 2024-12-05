@@ -2,6 +2,7 @@ using System.CodeDom.Compiler;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Reflection.Emit;
+using Avalonia.Markup.Xaml;
 using HotAvalonia.Helpers;
 using HotAvalonia.Reflection;
 
@@ -75,7 +76,24 @@ public static class AvaloniaRuntimeXamlScanner
     /// <summary>
     /// The dynamically generated assembly containing compiled XAML.
     /// </summary>
-    public static Assembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= FindDynamicXamlAssembly();
+    public static Assembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= GetDynamicXamlAssembly() ?? FindDynamicXamlAssembly();
+
+    /// <summary>
+    /// Retrieves the dynamically generated assembly containing compiled XAML.
+    /// </summary>
+    /// <returns>The dynamically generated assembly, if any; otherwise, <c>null</c>.</returns>
+    private static Assembly? GetDynamicXamlAssembly()
+    {
+        string xamlIlRuntimeCompilerName = "Avalonia.Markup.Xaml.XamlIl.AvaloniaXamlIlRuntimeCompiler";
+        Type? xamlIlRuntimeCompiler = typeof(AvaloniaRuntimeXamlLoader).Assembly.GetType(xamlIlRuntimeCompilerName);
+
+        BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        MethodInfo? initializeSre = xamlIlRuntimeCompiler?.GetMethod("InitializeSre", flags, null, Type.EmptyTypes, null);
+        FieldInfo? sreAsm = xamlIlRuntimeCompiler?.GetField("_sreAsm", flags);
+
+        initializeSre?.Invoke(null, null);
+        return sreAsm?.GetValue(null) as Assembly;
+    }
 
     /// <summary>
     /// Locates the dynamically generated assembly containing compiled XAML within the current application domain.
