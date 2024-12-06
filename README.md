@@ -39,8 +39,8 @@ While you could use the `dotnet add` command to accomplish this, I would strongl
 
 <ItemGroup>
   <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="Avalonia.Markup.Xaml.Loader" Version="$(AvaloniaVersion)" />
-  <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="HotAvalonia" Version="2.0.0" />
-  <PackageReference Include="HotAvalonia.Extensions" Version="2.0.0" PrivateAssets="All" />
+  <PackageReference Condition="$(DefineConstants.Contains(ENABLE_XAML_HOT_RELOAD))" Include="HotAvalonia" Version="2.0.1" />
+  <PackageReference Include="HotAvalonia.Extensions" Version="2.0.1" PrivateAssets="All" />
 </ItemGroup>
 ```
 
@@ -159,6 +159,8 @@ While HotAvalonia is a powerful tool for enhancing your Avalonia development wor
  1. **Code Files:** HotAvalonia cannot process `.cs`, `.fs`, `.vb`, or any other code files on its own. Therefore, when creating a new control, typically defined by a pair of `.axaml` and `.axaml.cs` files, you will need to recompile the project to see the changes take effect. However, existing XAML files can be edited freely without requiring recompilation.
 
  2. **Mobile Development:** Unlike in a local development environment, where your application and project files share the same filesystem, in an emulator, your application is running on what effectively is a remote system. Since HotAvalonia requires direct access to your project files, this scenario is currently unsupported.
+
+ 3. **ARM Support:** With the increasing popularity of ARM-based laptops, some of you may already work on such devices. Unfortunately, the tooling required for HotAvalonia to function at its fullest is not yet there. As a result, certain features - such as hot reloading of icons, images, styles, resource dictionaries, and other assets - may not work on ARM machines.
 
 ----
 
