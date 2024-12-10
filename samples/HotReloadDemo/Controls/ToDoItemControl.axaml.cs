@@ -5,7 +5,7 @@ using HotAvalonia;
 
 namespace HotReloadDemo.Controls;
 
-public partial class ToDoItemControl : UserControl
+internal sealed partial class ToDoItemControl : UserControl
 {
     public ToDoItemControl()
     {
