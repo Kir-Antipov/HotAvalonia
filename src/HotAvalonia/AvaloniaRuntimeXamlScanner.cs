@@ -326,48 +326,12 @@ public static class AvaloniaRuntimeXamlScanner
     /// </summary>
     /// <param name="assembly">The assembly containing the <c>XamlLoader</c> type.</param>
     /// <returns>The <see cref="MethodInfo"/> object representing the <c>TryLoad</c> method, or <c>null</c> if not found.</returns>
-    private static MethodInfo? FindTryLoadMethod(Assembly assembly)
-    {
-        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
-
-        Type? xamlLoader = FindXamlLoader(assembly);
-        return xamlLoader is null ? null : FindTryLoadMethod(xamlLoader);
-    }
-
-    /// <summary>
-    /// Identifies the <c>TryLoad</c> method in a given <c>XamlLoader</c> type.
-    /// </summary>
-    /// <param name="xamlLoaderType">The <c>XamlLoader</c> type containing the <c>TryLoad</c> method.</param>
-    /// <returns>The <see cref="MethodInfo"/> object representing the <c>TryLoad</c> method, or <c>null</c> if not found.</returns>
-    private static MethodInfo? FindTryLoadMethod(Type xamlLoaderType)
-    {
-        const string tryLoadMethodName = "TryLoad";
-
-        _ = xamlLoaderType ?? throw new ArgumentNullException(nameof(xamlLoaderType));
-
-        return xamlLoaderType
-            .GetMethods(StaticMember)
-            .Where(static x => x.Name is tryLoadMethodName)
-            .OrderByDescending(static x => x.GetParameters().Length)
-            .FirstOrDefault();
-    }
-
-    /// <summary>
-    /// Finds the <c>XamlLoader</c> type in a given assembly.
-    /// </summary>
-    /// <param name="assembly">The assembly to search for the <c>XamlLoader</c> type.</param>
-    /// <returns>The type representing <c>XamlLoader</c>, or <c>null</c> if not found.</returns>
-    private static Type? FindXamlLoader(Assembly assembly)
-    {
-        const string xamlLoaderNamespaceNamespace = "CompiledAvaloniaXaml";
-        const string xamlLoaderTypeName = "!XamlLoader";
-
-        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
-
-        return assembly
-            .GetLoadedTypes()
-            .FirstOrDefault(static x => x.Namespace is xamlLoaderNamespaceNamespace && x.Name is xamlLoaderTypeName);
-    }
+    private static MethodInfo? FindTryLoadMethod(Assembly assembly) => assembly?
+        .GetType("CompiledAvaloniaXaml.!XamlLoader")?
+        .GetMethods(StaticMember)
+        .Where(static x => "TryLoad".Equals(x.Name, StringComparison.Ordinal))
+        .OrderByDescending(static x => x.GetParameters().Length)
+        .FirstOrDefault();
 
     /// <summary>
     /// Finds the <c>InitializeComponent</c> method in relation to the given build method.
