@@ -8,7 +8,7 @@ namespace HotAvalonia;
 /// <summary>
 /// Represents metadata information for a control within the Avalonia framework.
 /// </summary>
-public sealed class AvaloniaControlInfo
+public sealed class AvaloniaControlInfo : IEquatable<AvaloniaControlInfo>
 {
     /// <summary>
     /// The URI used to identify the control's XAML definition.
@@ -44,6 +44,24 @@ public sealed class AvaloniaControlInfo
     public AvaloniaControlInfo(
         string uri,
         MethodBase build,
+        MethodInfo populate)
+        : this(new Uri(uri), build, populate, null, null)
+    {
+    }
+
+    /// <inheritdoc cref="AvaloniaControlInfo(Uri, MethodBase, MethodInfo, FieldInfo?, Action{object}?)"/>
+    public AvaloniaControlInfo(
+        Uri uri,
+        MethodBase build,
+        MethodInfo populate)
+        : this(uri, build, populate, null, null)
+    {
+    }
+
+    /// <inheritdoc cref="AvaloniaControlInfo(Uri, MethodBase, MethodInfo, FieldInfo?, Action{object}?)"/>
+    internal AvaloniaControlInfo(
+        string uri,
+        MethodBase build,
         MethodInfo populate,
         FieldInfo? populateOverride = null,
         Action<object>? refresh = null)
@@ -59,7 +77,7 @@ public sealed class AvaloniaControlInfo
     /// <param name="populate">The method used to populate the control instance.</param>
     /// <param name="populateOverride">The field responsible for overriding the populate logic of the control.</param>
     /// <param name="refresh">A delegate that defines a refresh action for the control.</param>
-    public AvaloniaControlInfo(
+    internal AvaloniaControlInfo(
         Uri uri,
         MethodBase build,
         MethodInfo populate,
@@ -187,4 +205,20 @@ public sealed class AvaloniaControlInfo
     /// </remarks>
     /// <param name="control">The control to refresh.</param>
     public void Refresh(object control) => _refresh?.Invoke(control);
+
+    /// <inheritdoc/>
+    public override string ToString()
+        => $"{nameof(AvaloniaControlInfo)} {{ {nameof(Uri)} = {Uri}, {nameof(ControlType)} = {ControlType} }}";
+
+    /// <inheritdoc/>
+    public override bool Equals(object obj)
+        => obj is AvaloniaControlInfo other && Equals(other);
+
+    /// <inheritdoc/>
+    public bool Equals(AvaloniaControlInfo other)
+        => other._uri == _uri && other._build == _build && other._populate == _populate;
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+        => _controlType.GetHashCode();
 }
