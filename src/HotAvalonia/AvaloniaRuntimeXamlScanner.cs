@@ -275,7 +275,9 @@ public static class AvaloniaRuntimeXamlScanner
         if (tryLoad is null || tryLoadBody is null)
             return Array.Empty<AvaloniaControlInfo>();
 
-        return ExtractAvaloniaControls(tryLoadBody, tryLoad.Module);
+        IEnumerable<AvaloniaControlInfo> extractedControls = ExtractAvaloniaControls(tryLoadBody, tryLoad.Module);
+        IEnumerable<AvaloniaControlInfo> scannedControls = ScanAvaloniaControls(assembly);
+        return extractedControls.Concat(scannedControls).Distinct();
     }
 
     /// <summary>
@@ -328,6 +330,35 @@ public static class AvaloniaRuntimeXamlScanner
 
             yield return new(uri, method, populateMethod, populateOverrideField, refresh);
             (str, uri) = (null, null);
+        }
+    }
+
+    /// <summary>
+    /// Scans the specified assembly for Avalonia controls.
+    /// </summary>
+    /// <param name="assembly">The assembly to scan for Avalonia controls.</param>
+    /// <returns>An enumerable containing information about the discovered Avalonia controls.</returns>
+    private static IEnumerable<AvaloniaControlInfo> ScanAvaloniaControls(Assembly assembly)
+    {
+        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
+
+        foreach (Type type in assembly.GetLoadedTypes())
+        {
+            MethodInfo? populateMethod = FindPopulateControlMethod(type);
+            if (populateMethod is null)
+                continue;
+
+            if (!TryExtractControlUri(populateMethod, out string? uri))
+                continue;
+
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            MethodBase? buildMethod = type.GetConstructor(flags, null, Type.EmptyTypes, null);
+            if (buildMethod is null)
+                continue;
+
+            FieldInfo? populateOverrideField = FindPopulateOverrideField(buildMethod);
+            Action<object> refresh = GetControlRefreshCallback(buildMethod);
+            yield return new(uri, buildMethod, populateMethod, populateOverrideField, refresh);
         }
     }
 
