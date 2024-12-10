@@ -71,35 +71,45 @@ public static class AvaloniaRuntimeXamlScanner
     /// <summary>
     /// The dynamically generated assembly containing compiled XAML.
     /// </summary>
-    private static Assembly? s_dynamicXamlAssembly;
+    private static DynamicAssembly? s_dynamicXamlAssembly;
 
     /// <summary>
     /// The dynamically generated assembly containing compiled XAML.
     /// </summary>
-    public static Assembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= GetDynamicXamlAssembly() ?? FindDynamicXamlAssembly();
+    public static DynamicAssembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= GetDynamicXamlAssembly() ?? FindDynamicXamlAssembly();
 
     /// <summary>
     /// Retrieves the dynamically generated assembly containing compiled XAML.
     /// </summary>
     /// <returns>The dynamically generated assembly, if any; otherwise, <c>null</c>.</returns>
-    private static Assembly? GetDynamicXamlAssembly()
+    private static DynamicAssembly? GetDynamicXamlAssembly()
     {
-        string xamlIlRuntimeCompilerName = "Avalonia.Markup.Xaml.XamlIl.AvaloniaXamlIlRuntimeCompiler";
-        Type? xamlIlRuntimeCompiler = typeof(AvaloniaRuntimeXamlLoader).Assembly.GetType(xamlIlRuntimeCompilerName);
+        Assembly xamlLoaderAssembly = typeof(AvaloniaRuntimeXamlLoader).Assembly;
+        Type xamlAssembly = xamlLoaderAssembly.GetType("XamlX.TypeSystem.IXamlAssembly") ?? typeof(object);
+        Type? xamlIlRuntimeCompiler = xamlLoaderAssembly.GetType("Avalonia.Markup.Xaml.XamlIl.AvaloniaXamlIlRuntimeCompiler");
 
-        BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
-        MethodInfo? initializeSre = xamlIlRuntimeCompiler?.GetMethod("InitializeSre", flags, null, Type.EmptyTypes, null);
-        FieldInfo? sreAsm = xamlIlRuntimeCompiler?.GetField("_sreAsm", flags);
-
+        MethodInfo? initializeSre = xamlIlRuntimeCompiler?.GetMethod("InitializeSre", StaticMember, null, Type.EmptyTypes, null);
         initializeSre?.Invoke(null, null);
-        return sreAsm?.GetValue(null) as Assembly;
+
+        object? sreAsm = xamlIlRuntimeCompiler?.GetField("_sreAsm", StaticMember)?.GetValue(null);
+        object? sreTypeSystem = xamlIlRuntimeCompiler?.GetField("_sreTypeSystem", StaticMember)?.GetValue(null);
+        if (sreAsm is not Assembly asm || sreTypeSystem is null)
+            return null;
+
+        DynamicAssembly dynamicAssembly = DynamicSreAssembly.Create(asm, sreTypeSystem);
+        object? sreTypeSystemAssemblies = sreTypeSystem.GetType().GetField("_assemblies", InstanceMember)?.GetValue(sreTypeSystem);
+        MethodInfo? addAssembly = sreTypeSystemAssemblies?.GetType().GetMethod(nameof(List<string>.Add), [xamlAssembly]);
+        if (xamlAssembly.IsAssignableFrom(dynamicAssembly.GetType()))
+            addAssembly?.Invoke(sreTypeSystemAssemblies, [dynamicAssembly]);
+
+        return dynamicAssembly;
     }
 
     /// <summary>
     /// Locates the dynamically generated assembly containing compiled XAML within the current application domain.
     /// </summary>
     /// <returns>The dynamically generated assembly if found; otherwise, <c>null</c>.</returns>
-    private static Assembly? FindDynamicXamlAssembly()
+    private static DynamicAssembly? FindDynamicXamlAssembly()
     {
         const string dynamicXamlAssemblyMarkerTypeName = "XamlIlContext";
         const int stringifiedGuidLength = 32; // Guid.NewGuid().ToString("N").Length
@@ -114,7 +124,7 @@ public static class AvaloniaRuntimeXamlScanner
                 continue;
 
             if (assembly.GetLoadedTypes().Any(x => x.Name is dynamicXamlAssemblyMarkerTypeName))
-                return assembly;
+                return new(assembly);
         }
 
         return null;
@@ -560,7 +570,7 @@ public static class AvaloniaRuntimeXamlScanner
     {
         _ = uri ?? throw new ArgumentNullException(nameof(uri));
 
-        Assembly? dynamicXamlAssembly = DynamicXamlAssembly;
+        Assembly? dynamicXamlAssembly = DynamicXamlAssembly?.Assembly;
         if (dynamicXamlAssembly is null)
             yield break;
 

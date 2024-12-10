@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using System.Reflection.Emit;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
@@ -65,8 +64,8 @@ internal static class AvaloniaControlHelper
         // `TextChanged`, etc.). To circumvent this problem, we need to
         // patch the dynamic XAML assembly with `IgnoresAccessChecksToAttribute`.
         controlType ??= control?.GetType();
-        if (controlType is not null && AvaloniaRuntimeXamlScanner.DynamicXamlAssembly is AssemblyBuilder xamlAssembly)
-            xamlAssembly.AllowAccessTo(controlType);
+        if (controlType is not null)
+            AvaloniaRuntimeXamlScanner.DynamicXamlAssembly?.AllowAccessTo(controlType);
 
         string xamlWithDynamicComponents = MakeStaticComponentsDynamic(xaml);
         HashSet<MethodInfo> oldPopulateMethods = new(AvaloniaRuntimeXamlScanner.FindDynamicPopulateMethods(uri));
