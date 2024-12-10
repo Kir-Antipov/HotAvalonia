@@ -543,15 +543,7 @@ public static class AvaloniaRuntimeXamlScanner
     /// <param name="userControlType">The type of the user control for which the populate method is sought.</param>
     /// <returns>The <see cref="MethodInfo"/> object representing the populate method, or <c>null</c> if not found.</returns>
     private static MethodInfo? FindPopulateControlMethod(Type userControlType)
-    {
-        _ = userControlType ?? throw new ArgumentNullException(nameof(userControlType));
-
-        return userControlType
-            .GetMethods(StaticMember)
-            .FirstOrDefault(static x =>
-                x.Name.StartsWith(PopulateControlMethodNamePrefix, StringComparison.Ordinal)
-                && IsPopulateMethod(x));
-    }
+        => userControlType.GetMethod(PopulateControlMethodNamePrefix, StaticMember, null, [typeof(IServiceProvider), userControlType], null);
 
     /// <inheritdoc cref="FindDynamicPopulateMethods(string)"/>
     internal static IEnumerable<MethodInfo> FindDynamicPopulateMethods(Uri uri)
