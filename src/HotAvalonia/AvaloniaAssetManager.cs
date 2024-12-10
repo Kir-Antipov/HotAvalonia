@@ -47,12 +47,7 @@ public sealed class AvaloniaAssetManager : IDisposable
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
         if (!TryInjectAssetCallbacks(out _injections))
-        {
-            LoggingHelper.Logger?.Log(
-                this,
-                "Failed to subscribe to asset loading events. Icons and images won't be reloaded upon file changes."
-            );
-        }
+            LoggingHelper.Log("Failed to subscribe to asset loading events. Icons and images won't be reloaded upon file changes.");
     }
 
     /// <summary>

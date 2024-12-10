@@ -204,7 +204,11 @@ public sealed class AvaloniaControlInfo : IEquatable<AvaloniaControlInfo>
     /// the population routine, so we need to sort those out manually.
     /// </remarks>
     /// <param name="control">The control to refresh.</param>
-    public void Refresh(object control) => _refresh?.Invoke(control);
+    public void Refresh(object control)
+    {
+        LoggingHelper.Log(control, "Refreshing...");
+        _refresh?.Invoke(control);
+    }
 
     /// <inheritdoc/>
     public override string ToString()
