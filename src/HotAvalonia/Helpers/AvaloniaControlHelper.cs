@@ -27,19 +27,6 @@ internal static class AvaloniaControlHelper
     private static readonly PropertyInfo? s_inheritanceParentProperty;
 
     /// <summary>
-    /// The `Type` property of the <c>XamlX.IL.SreTypeSystem.SreType</c> class.
-    /// </summary>
-    private static readonly PropertyInfo? s_xamlTypeProperty;
-
-    /// <summary>
-    /// The <see cref="IInjection"/> instance responsible for injecting the
-    /// <see cref="OnNewSreMethodBuilder(MethodBuilder, IEnumerable{object})"/>
-    /// callback.
-    /// </summary>
-    [SuppressMessage("CodeQuality", "IDE0052", Justification = "Injections must be kept alive.")]
-    private static readonly IInjection? s_sreMethodBuilderInjection;
-
-    /// <summary>
     /// Initializes static members of the <see cref="AvaloniaControlHelper"/> class.
     /// </summary>
     static AvaloniaControlHelper()
@@ -49,50 +36,6 @@ internal static class AvaloniaControlHelper
         FieldInfo? stylesAppliedField = typeof(StyledElement).GetField("_stylesApplied", InstanceMember);
         s_stylesAppliedField = stylesAppliedField?.FieldType == typeof(bool) ? stylesAppliedField : null;
         s_inheritanceParentProperty = typeof(AvaloniaObject).GetProperty("InheritanceParent", InstanceMember);
-
-        Assembly xamlLoaderAssembly = typeof(AvaloniaRuntimeXamlLoader).Assembly;
-        Type? sreType = xamlLoaderAssembly.GetType("XamlX.IL.SreTypeSystem+SreType");
-        s_xamlTypeProperty = sreType?.GetProperty("Type");
-
-        Type? sreMethodBuilder = xamlLoaderAssembly.GetType("XamlX.IL.SreTypeSystem+SreTypeBuilder+SreMethodBuilder");
-        ConstructorInfo? sreMethodBuilderCtor = sreMethodBuilder?.GetConstructors(InstanceMember).FirstOrDefault(x => x.GetParameters().Length > 1);
-        if (sreMethodBuilderCtor is not null && CallbackInjector.SupportsOptimizedMethods)
-            s_sreMethodBuilderInjection = CallbackInjector.Inject(sreMethodBuilderCtor, OnNewSreMethodBuilder);
-    }
-
-    /// <summary>
-    /// Fixes newly created <c>XamlX.IL.SreTypeSystem.SreTypeBuilder.SreMethodBuilder</c>
-    /// instances.
-    /// </summary>
-    /// <param name="methodBuilder">
-    /// The <see cref="MethodBuilder"/> used to create the
-    /// <c>SreMethodBuilder</c> instance.
-    /// </param>
-    /// <param name="parameters">
-    /// The parameters used to create the <c>SreMethodBuilder</c>
-    /// instance represented by a collection of <c>SreType</c> objects.
-    /// </param>
-    private static void OnNewSreMethodBuilder(MethodBuilder methodBuilder, IEnumerable<object> parameters)
-    {
-        // `Avalonia.Markup.Xaml.Loader` does not handle scenarios where
-        // the control population logic needs to reference private members,
-        // which are commonly used for subscribing to events (e.g., `Click`,
-        // `TextChanged`, etc.). To circumvent this problem, we need this
-        // callback to track the creation of dynamic `Populate` methods and
-        // patch their containing assembly with `IgnoresAccessChecksToAttribute`.
-        if (!AvaloniaRuntimeXamlScanner.IsDynamicPopulateMethod(methodBuilder))
-            return;
-
-        if (methodBuilder.DeclaringType?.Assembly is not AssemblyBuilder assembly)
-            return;
-
-        IEnumerable<Type> parameterTypes = parameters
-            .Where(static x => x is not null && x.GetType() == s_xamlTypeProperty?.DeclaringType)
-            .Select(static x => (Type?)s_xamlTypeProperty?.GetValue(x))
-            .Where(static x => x is not null)!;
-
-        foreach (Type parameterType in parameterTypes)
-            assembly.AllowAccessTo(parameterType);
     }
 
     /// <inheritdoc cref="Load(string, Uri, object?, Type?, out MethodInfo?)"/>
@@ -116,6 +59,11 @@ internal static class AvaloniaControlHelper
         _ = xaml ?? throw new ArgumentNullException(nameof(xaml));
         _ = uri ?? throw new ArgumentNullException(nameof(uri));
 
+        // `Avalonia.Markup.Xaml.Loader` does not handle scenarios where
+        // the control population logic needs to reference private members,
+        // which are commonly used for subscribing to events (e.g., `Click`,
+        // `TextChanged`, etc.). To circumvent this problem, we need to
+        // patch the dynamic XAML assembly with `IgnoresAccessChecksToAttribute`.
         controlType ??= control?.GetType();
         if (controlType is not null && AvaloniaRuntimeXamlScanner.DynamicXamlAssembly is AssemblyBuilder xamlAssembly)
             xamlAssembly.AllowAccessTo(controlType);
