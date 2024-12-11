@@ -5,7 +5,7 @@ namespace HotAvalonia.Helpers;
 /// <summary>
 /// Provides helper methods for working with file paths.
 /// </summary>
-public static class PathHelper
+internal static class PathHelper
 {
     /// <summary>
     /// Provides a string comparison mechanism suitable for comparing
