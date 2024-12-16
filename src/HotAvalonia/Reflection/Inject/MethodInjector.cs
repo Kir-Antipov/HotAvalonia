@@ -83,11 +83,21 @@ internal static class MethodInjector
         => Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1";
 
     /// <summary>
+    /// Determines whether the injection system is disabled by the user.
+    /// </summary>
+    /// <returns><c>true</c> if the injection system is disabled; otherwise, <c>false</c>.</returns>
+    private static bool IsDisabled()
+        => Environment.GetEnvironmentVariable("HOTAVALONIA_DISABLE_INJECTIONS") is "1" or "true";
+
+    /// <summary>
     /// Detects the type of the method injection technique supported by the current runtime environment.
     /// </summary>
     /// <returns>The <see cref="Inject.InjectionType"/> supported by the current runtime environment.</returns>
     private static InjectionType DetectSupportedInjectionType()
     {
+        if (IsDisabled())
+            return InjectionType.None;
+
         try
         {
             // Enable dynamic code generation, which is required for MonoMod to function.

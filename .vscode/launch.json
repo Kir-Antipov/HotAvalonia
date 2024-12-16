@@ -7,6 +7,9 @@
       "request": "launch",
       "preLaunchTask": "build",
       "program": "${workspaceFolder}/samples/HotReloadDemo/bin/Debug/net9.0/HotReloadDemo.dll",
+      "env": {
+        "HOTAVALONIA_DISABLE_INJECTIONS": "false",
+      },
       "args": [],
       "cwd": "${workspaceFolder}/samples/HotReloadDemo",
       "console": "internalConsole",
