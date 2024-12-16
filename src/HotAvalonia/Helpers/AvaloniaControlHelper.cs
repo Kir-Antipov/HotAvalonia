@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
 using Avalonia.Markup.Xaml.XamlIl.Runtime;
+using Avalonia.Platform;
 using Avalonia.Styling;
 using HotAvalonia.Reflection.Inject;
 
@@ -44,13 +45,13 @@ internal static class AvaloniaControlHelper
     /// <param name="xaml">The XAML markup to load the control from.</param>
     /// <param name="uri">The URI that identifies the XAML source.</param>
     /// <param name="control">The optional control object to be populated.</param>
-    /// <param name="controlType">The type of the control.</param>
+    /// <param name="assembly">The assembly defining the control.</param>
     /// <param name="compiledPopulateMethod">The newly compiled populate method, if the compilation was successful.</param>
     /// <returns>An object representing the loaded Avalonia control.</returns>
     /// <remarks>
     /// This method replaces static resources with their dynamic counterparts before loading the control.
     /// </remarks>
-    public static object Load(string xaml, Uri uri, object? control, Type? controlType, out MethodInfo? compiledPopulateMethod)
+    public static object Load(string xaml, Uri uri, object? control, Assembly? assembly, out MethodInfo? compiledPopulateMethod)
     {
         _ = xaml ?? throw new ArgumentNullException(nameof(xaml));
         _ = uri ?? throw new ArgumentNullException(nameof(uri));
@@ -60,15 +61,15 @@ internal static class AvaloniaControlHelper
         // which are commonly used for subscribing to events (e.g., `Click`,
         // `TextChanged`, etc.). To circumvent this problem, we need to
         // patch the dynamic XAML assembly with `IgnoresAccessChecksToAttribute`.
-        controlType ??= control?.GetType();
-        if (controlType?.Assembly is Assembly controlAssembly)
-            AvaloniaRuntimeXamlScanner.DynamicXamlAssembly?.AllowAccessTo(controlAssembly);
+        assembly ??= AssetLoader.GetAssembly(uri);
+        if (assembly is not null)
+            AvaloniaRuntimeXamlScanner.DynamicXamlAssembly?.AllowAccessTo(assembly);
 
         string xamlWithDynamicComponents = MakeStaticComponentsDynamic(xaml);
         HashSet<MethodInfo> oldPopulateMethods = new(AvaloniaRuntimeXamlScanner.FindDynamicPopulateMethods(uri));
 
         Reset(control, out Action restore);
-        object loadedControl = AvaloniaRuntimeXamlLoader.Load(xamlWithDynamicComponents, null, control, uri, designMode: false);
+        object loadedControl = AvaloniaRuntimeXamlLoader.Load(xamlWithDynamicComponents, assembly, control, uri, designMode: false);
         restore();
 
         compiledPopulateMethod = AvaloniaRuntimeXamlScanner
