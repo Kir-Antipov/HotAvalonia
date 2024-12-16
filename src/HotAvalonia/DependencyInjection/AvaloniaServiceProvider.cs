@@ -1,5 +1,5 @@
-using System.Reflection;
 using Avalonia;
+using HotAvalonia.Helpers;
 
 namespace HotAvalonia.DependencyInjection;
 
@@ -33,7 +33,7 @@ internal sealed class AvaloniaServiceProvider : IServiceProvider
     /// Gets the current instance of the <see cref="AvaloniaLocator"/>.
     /// </summary>
     private static AvaloniaLocator CurrentLocator => typeof(AvaloniaLocator)
-        .GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+        .GetStaticFields()
         .Select(static x => x.GetValue(null))
         .OfType<AvaloniaLocator>()
         .First();
@@ -53,7 +53,7 @@ internal sealed class AvaloniaServiceProvider : IServiceProvider
         _ = locator ?? throw new ArgumentNullException(nameof(locator));
 
         IDictionary<Type, Func<object?>> registry = locator.GetType()
-            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .GetInstanceFields()
             .Select(x => x.GetValue(locator))
             .OfType<IDictionary<Type, Func<object?>>>()
             .First()!;

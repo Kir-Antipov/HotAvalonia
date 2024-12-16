@@ -105,7 +105,7 @@ internal static class OpCodeHelper
     /// </returns>
     private static IEnumerable<OpCode> ExtractAllOpCodes()
     {
-        FieldInfo[] fields = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static);
+        FieldInfo[] fields = typeof(OpCodes).GetStaticFields();
         return fields.Where(static x => x.FieldType == typeof(OpCode)).Select(static x => (OpCode)x.GetValue(null));
     }
 

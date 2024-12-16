@@ -36,7 +36,6 @@ internal static class DynamicSreAssembly
     /// </returns>
     private static Type CreateDynamicSreAssemblyType()
     {
-        const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
         Assembly xamlAssembly = typeof(AvaloniaRuntimeXamlLoader).Assembly;
@@ -79,7 +78,7 @@ internal static class DynamicSreAssembly
         ILGenerator ctorIl = ctorBuilder.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
-        ctorIl.Emit(OpCodes.Call, parentType.GetConstructor(InstanceMember, null, [typeof(Assembly)], null)!);
+        ctorIl.Emit(OpCodes.Call, parentType.GetInstanceConstructor(typeof(Assembly))!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_2);
         ctorIl.Emit(OpCodes.Stfld, systemFieldBuilder);
@@ -126,7 +125,7 @@ internal static class DynamicSreAssembly
             allowIl.Emit(OpCodes.Ldarg_0);
             allowIl.Emit(OpCodes.Ldfld, systemFieldBuilder);
             allowIl.Emit(OpCodes.Ldarg_1);
-            allowIl.Emit(OpCodes.Callvirt, sreTypeSystem.GetMethod("ResolveType", InstanceMember, null, [typeof(Type)], null)!);
+            allowIl.Emit(OpCodes.Callvirt, sreTypeSystem.GetInstanceMethod("ResolveType", [typeof(Type)])!);
             allowIl.Emit(OpCodes.Callvirt, typesFieldBuilder.FieldType.GetProperty("Item", sreType, [typeof(string)])!.SetMethod);
         }
         allowIl.Emit(OpCodes.Ret);

@@ -170,7 +170,6 @@ file static class DynamicAssetBuilder
     /// <returns>A newly generated <see cref="Type"/> representing the dynamically asset type.</returns>
     public static Type CreateDynamicAssetType(Type assetType)
     {
-        const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
         _ = assetType ?? throw new ArgumentNullException(nameof(assetType));
@@ -219,13 +218,13 @@ file static class DynamicAssetBuilder
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Call, assetFieldBuilder.FieldType.GetProperty(nameof(Uri))!.GetMethod);
         ctorIl.Emit(OpCodes.Call, typeof(Uri).GetProperty(nameof(Uri.LocalPath))!.GetMethod);
-        ctorIl.Emit(OpCodes.Call, assetType.GetConstructor(InstanceMember, null, [typeof(string)], null)!);
+        ctorIl.Emit(OpCodes.Call, assetType.GetInstanceConstructor(typeof(string))!);
         ctorIl.Emit(OpCodes.Br_S, ctorEnd);
 
         ctorIl.MarkLabel(streamCtorStart);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_2);
-        ctorIl.Emit(OpCodes.Call, assetType.GetConstructor(InstanceMember, null, [typeof(Stream)], null)!);
+        ctorIl.Emit(OpCodes.Call, assetType.GetInstanceConstructor(typeof(Stream))!);
 
         ctorIl.MarkLabel(ctorEnd);
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -288,10 +287,7 @@ file static class DynamicAssetBuilder
         _ = invoke ?? throw new MissingMethodException(delegateType.FullName, nameof(Action.Invoke));
 
         Type[] parameterTypes = invoke.GetParameterTypes();
-        ConstructorInfo? ctor = assetType.GetConstructor(
-            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,
-            null, parameterTypes, null
-        );
+        ConstructorInfo? ctor = assetType.GetInstanceConstructor(parameterTypes);
         _ = ctor ?? throw new MissingMethodException(assetType.FullName, ".ctor");
 
         // public static TAsset Create{TAsset}(...args)
@@ -319,7 +315,7 @@ file static class DynamicAssetBuilder
 
         Type delegateType = typeof(Action<,>).MakeGenericType(assetType, assetType);
         MethodInfo disposeMethod = typeof(IDisposable).GetMethod(nameof(IDisposable.Dispose))!;
-        FieldInfo[] fields = assetType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        FieldInfo[] fields = assetType.GetInstanceFields();
 
         // public static void Copy{TAsset}(TAsset from, TAsset to)
         // {

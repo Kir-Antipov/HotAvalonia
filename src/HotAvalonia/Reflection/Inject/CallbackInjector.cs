@@ -82,9 +82,9 @@ internal static class CallbackInjector
         // Build
         Type injectionType = injectionBuilder.CreateTypeInfo();
         IInjection injection = (IInjection)Activator.CreateInstance(injectionType);
-        FieldInfo? thisArgField = thisArgBuilder is null ? null : injectionType.GetField(thisArgBuilder.Name, BindingFlags.NonPublic | BindingFlags.Static);
-        FieldInfo? callerMemberField = callerMemberBuilder is null ? null : injectionType.GetField(callerMemberBuilder.Name, BindingFlags.NonPublic | BindingFlags.Static);
-        FieldInfo methodInjectionField = injectionType.GetField(methodInjectionBuilder.Name, BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new MissingFieldException(injectionType.FullName, methodInjectionBuilder.Name);
+        FieldInfo? thisArgField = thisArgBuilder is null ? null : injectionType.GetStaticField(thisArgBuilder.Name);
+        FieldInfo? callerMemberField = callerMemberBuilder is null ? null : injectionType.GetStaticField(callerMemberBuilder.Name);
+        FieldInfo methodInjectionField = injectionType.GetInstanceField(methodInjectionBuilder.Name) ?? throw new MissingFieldException(injectionType.FullName, methodInjectionBuilder.Name);
         MethodInfo invokeMethod = injectionType.GetMethod(invokeBuilder.Name) ?? throw new MissingMethodException(injectionType.FullName, invokeBuilder.Name);
 
         // Set up

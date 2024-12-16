@@ -174,15 +174,12 @@ file static class DynamicAssetLoaderBuilder
     /// </returns>
     public static Type CreateDynamicAssetLoaderType()
     {
-        const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
         ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
         AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
         Type parentType = typeof(DynamicAssetLoader);
-        FieldInfo fallbackAssetLoader = parentType
-            .GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
-            .First(x => typeof(IAssetLoader).IsAssignableFrom(x.FieldType));
+        FieldInfo fallbackAssetLoader = parentType.GetInstanceFields().First(x => typeof(IAssetLoader).IsAssignableFrom(x.FieldType));
 
         string fullName = $"{parentType.FullName}Impl";
         Type? existingType = assemblyBuilder.GetType(fullName, throwOnError: false);
@@ -207,7 +204,7 @@ file static class DynamicAssetLoaderBuilder
         ILGenerator ctorIl = ctorBuilder.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
-        ctorIl.Emit(OpCodes.Call, parentType.GetConstructor(InstanceMember, null, [typeof(IAssetLoader)], null)!);
+        ctorIl.Emit(OpCodes.Call, parentType.GetInstanceConstructor(typeof(IAssetLoader))!);
         ctorIl.Emit(OpCodes.Ret);
 
         //     public IAssetLoader.<...>(...)
@@ -218,7 +215,7 @@ file static class DynamicAssetLoaderBuilder
         foreach (MethodInfo virtualMethod in virtualMethods)
         {
             Type[] parameterTypes = virtualMethod.GetParameterTypes();
-            MethodInfo? parentMethod = parentType.GetMethod(virtualMethod.Name, InstanceMember, null, parameterTypes, null);
+            MethodInfo? parentMethod = parentType.GetInstanceMethod(virtualMethod.Name, parameterTypes);
 
             MethodBuilder virtualMethodBuilder = typeBuilder.DefineMethod(
                 virtualMethod.Name, VirtualMethod,

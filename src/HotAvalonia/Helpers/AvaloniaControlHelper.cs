@@ -30,11 +30,8 @@ internal static class AvaloniaControlHelper
     /// </summary>
     static AvaloniaControlHelper()
     {
-        const BindingFlags InstanceMember = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-        FieldInfo? stylesAppliedField = typeof(StyledElement).GetField("_stylesApplied", InstanceMember);
-        s_stylesAppliedField = stylesAppliedField?.FieldType == typeof(bool) ? stylesAppliedField : null;
-        s_inheritanceParentProperty = typeof(AvaloniaObject).GetProperty("InheritanceParent", InstanceMember);
+        s_stylesAppliedField = typeof(StyledElement).GetInstanceField("_stylesApplied", typeof(bool));
+        s_inheritanceParentProperty = typeof(AvaloniaObject).GetInstanceProperty("InheritanceParent");
     }
 
     /// <inheritdoc cref="Load(string, Uri, object?, Type?, out MethodInfo?)"/>

@@ -177,14 +177,7 @@ internal static class AssemblyHelper
     /// </returns>
     private static Func<IDisposable> CreateForceAllowDynamicCodeDelegate()
     {
-        MethodInfo? forceAllowDynamicCode = typeof(AssemblyBuilder).GetMethod(
-            nameof(ForceAllowDynamicCode),
-            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static,
-            null,
-            Type.EmptyTypes,
-            null
-        );
-
+        MethodInfo? forceAllowDynamicCode = typeof(AssemblyBuilder).GetStaticMethod(nameof(ForceAllowDynamicCode), Type.EmptyTypes);
         if (forceAllowDynamicCode is not null && typeof(IDisposable).IsAssignableFrom(forceAllowDynamicCode.ReturnType))
             return (Func<IDisposable>)forceAllowDynamicCode.CreateDelegate(typeof(Func<IDisposable>));
 
@@ -236,7 +229,7 @@ internal static class AssemblyHelper
         staticNameIl.MarkLabel(isNotAttribute);
         staticNameIl.Emit(OpCodes.Ret);
 
-        ConstructorInfo superCtor = typeof(Attribute).GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).First(static x => x.GetParameters().Length is 0);
+        ConstructorInfo superCtor = typeof(Attribute).GetInstanceConstructor()!;
         ConstructorBuilder ctorBuilder = attributeBuilder.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(string)]);
         ILGenerator ctorIl = ctorBuilder.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
