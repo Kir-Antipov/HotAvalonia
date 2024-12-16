@@ -35,14 +35,14 @@ public class DynamicAssembly
     public Assembly Assembly => _assembly;
 
     /// <summary>
-    /// Grants the dynamic assembly access to the specified type.
+    /// Grants the dynamic assembly access to another assembly.
     /// </summary>
-    /// <param name="type">The <see cref="Type"/> to allow access to.</param>
-    public virtual void AllowAccessTo(Type type)
+    /// <param name="assembly">The assembly to allow access to.</param>
+    public virtual void AllowAccessTo(Assembly assembly)
     {
-        _ = type ?? throw new ArgumentNullException(nameof(type));
+        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
 
         if (_assembly is AssemblyBuilder assemblyBuilder)
-            assemblyBuilder.AllowAccessTo(type);
+            assemblyBuilder.AllowAccessTo(assembly);
     }
 }
