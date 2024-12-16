@@ -91,7 +91,7 @@ internal static class MethodInjector
         try
         {
             // Enable dynamic code generation, which is required for MonoMod to function.
-            _ = AssemblyHelper.ForceAllowDynamicCode();
+            using IDisposable context = AssemblyHelper.ForceAllowDynamicCode();
 
             // `PlatformTriple.Current` may throw exceptions such as:
             //  - NotImplementedException

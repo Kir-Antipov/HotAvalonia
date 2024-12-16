@@ -10,11 +10,6 @@ namespace HotAvalonia.Reflection.Inject;
 internal static class CallbackInjector
 {
     /// <summary>
-    /// The module builder used to define dynamic types.
-    /// </summary>
-    private static readonly Lazy<ModuleBuilder> s_moduleBuilder = new(CreateModuleBuilder, isThreadSafe: true);
-
-    /// <summary>
     /// Indicates whether callback injection is supported in the current runtime environment.
     /// </summary>
     public static bool IsSupported => MethodInjector.IsSupported;
@@ -60,8 +55,7 @@ internal static class CallbackInjector
 
         ThrowIfNotSupported();
 
-        ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
-        AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
+        using IDisposable context = AssemblyHelper.GetDynamicAssembly(out AssemblyBuilder assemblyBuilder, out ModuleBuilder moduleBuilder);
 
         // Bypass access modifiers
         assemblyBuilder.AllowAccessTo(target);
@@ -306,17 +300,4 @@ internal static class CallbackInjector
     /// <returns><c>true</c> if the method requires a caller member parameter; otherwise, <c>false</c>.</returns>
     private static bool NeedsCallerMember(MethodBase method)
         => method.GetParameters().Any(static x => x.GetCallbackParameterType() is CallbackParameterType.CallerMember);
-
-    /// <summary>
-    /// Creates and returns a dynamic module builder.
-    /// </summary>
-    /// <returns>A new instance of <see cref="ModuleBuilder"/>.</returns>
-    private static ModuleBuilder CreateModuleBuilder()
-    {
-        string assemblyName = $"__Reflection.Inject.Dynamic+{Guid.NewGuid():N}";
-        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        assemblyBuilder.AllowAccessTo(typeof(IInjection));
-
-        return assemblyBuilder.DefineDynamicModule(assemblyName);
-    }
 }

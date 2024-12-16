@@ -141,11 +141,6 @@ internal class DynamicAssetLoader
 file static class DynamicAssetLoaderBuilder
 {
     /// <summary>
-    /// The module builder used to define dynamic types.
-    /// </summary>
-    private static readonly Lazy<ModuleBuilder> s_moduleBuilder = new(CreateModuleBuilder, isThreadSafe: true);
-
-    /// <summary>
     /// Creates a delegate for constructing dynamic asset loader instances.
     /// </summary>
     /// <returns>A delegate that can be used to construct dynamic asset loader instances.</returns>
@@ -176,8 +171,7 @@ file static class DynamicAssetLoaderBuilder
     {
         const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
-        ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
-        AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
+        using IDisposable context = AssemblyHelper.GetDynamicAssembly(out AssemblyBuilder assemblyBuilder, out ModuleBuilder moduleBuilder);
         Type parentType = typeof(DynamicAssetLoader);
         FieldInfo fallbackAssetLoader = parentType.GetInstanceFields().First(x => typeof(IAssetLoader).IsAssignableFrom(x.FieldType));
 
@@ -233,18 +227,5 @@ file static class DynamicAssetLoaderBuilder
 
         // }
         return typeBuilder.CreateTypeInfo();
-    }
-
-    /// <summary>
-    /// Creates and returns a dynamic module builder.
-    /// </summary>
-    /// <returns>A new instance of <see cref="ModuleBuilder"/>.</returns>
-    private static ModuleBuilder CreateModuleBuilder()
-    {
-        string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        assemblyBuilder.AllowAccessTo(typeof(DynamicAssetLoader));
-
-        return assemblyBuilder.DefineDynamicModule(assemblyName);
     }
 }

@@ -59,11 +59,6 @@ internal static class DynamicAssetTypeConverter<TAsset, TAssetTypeConverter>
 file static class DynamicAssetTypeConverterBuilder
 {
     /// <summary>
-    /// The module builder used to define dynamic types.
-    /// </summary>
-    private static readonly Lazy<ModuleBuilder> s_moduleBuilder = new(CreateModuleBuilder, isThreadSafe: true);
-
-    /// <summary>
     /// Creates a type that serves as a custom asset type converter.
     /// </summary>
     /// <param name="assetType">The type of the asset to be dynamically loaded.</param>
@@ -79,9 +74,7 @@ file static class DynamicAssetTypeConverterBuilder
         _ = assetType ?? throw new ArgumentNullException(nameof(assetType));
         _ = assetConverterType ?? throw new ArgumentNullException(nameof(assetConverterType));
 
-        ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
-        AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
-
+        using IDisposable context = AssemblyHelper.GetDynamicAssembly(out AssemblyBuilder assemblyBuilder, out ModuleBuilder moduleBuilder);
         string fullName = $"{assetConverterType.FullName}$Dynamic";
         Type? existingType = assemblyBuilder.GetType(fullName, throwOnError: false);
         if (existingType is not null)
@@ -171,18 +164,5 @@ file static class DynamicAssetTypeConverterBuilder
 
         // }
         return typeBuilder.CreateTypeInfo();
-    }
-
-    /// <summary>
-    /// Creates and returns a dynamic module builder.
-    /// </summary>
-    /// <returns>A new instance of <see cref="ModuleBuilder"/>.</returns>
-    private static ModuleBuilder CreateModuleBuilder()
-    {
-        string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        assemblyBuilder.AllowAccessTo(typeof(DynamicAssetTypeConverter<>));
-
-        return assemblyBuilder.DefineDynamicModule(assemblyName);
     }
 }

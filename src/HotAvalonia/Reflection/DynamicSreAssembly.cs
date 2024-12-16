@@ -38,6 +38,12 @@ internal static class DynamicSreAssembly
     {
         const MethodAttributes VirtualMethod = MethodAttributes.Public | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
 
+        using IDisposable context = AssemblyHelper.GetDynamicAssembly(out AssemblyBuilder assemblyBuilder, out ModuleBuilder moduleBuilder);
+        string fullName = nameof(DynamicSreAssembly);
+        Type? existingType = assemblyBuilder.GetType(fullName, throwOnError: false);
+        if (existingType is not null)
+            return existingType;
+
         Assembly xamlAssembly = typeof(AvaloniaRuntimeXamlLoader).Assembly;
         Type parentType = typeof(DynamicAssembly);
         Type interfaceType = xamlAssembly.GetType("XamlX.TypeSystem.IXamlAssembly") ?? typeof(IEquatable<object>);
@@ -47,15 +53,11 @@ internal static class DynamicSreAssembly
         Type sreTypeSystem = xamlAssembly.GetType("XamlX.IL.SreTypeSystem") ?? typeof(object);
         Type sreType = xamlAssembly.GetType("XamlX.IL.SreTypeSystem+SreType") ?? typeof(object);
 
-        string assemblyName = $"{nameof(HotAvalonia)}.XamlX.IL";
-        using IDisposable context = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        assemblyBuilder.AllowAccessTo(typeof(DynamicAssembly));
         assemblyBuilder.AllowAccessTo(xamlAssembly);
 
         // public sealed class DynamicSreAssembly : DynamicAssembly, IXamlAssembly
         // {
-        ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName);
-        TypeBuilder typeBuilder = moduleBuilder.DefineType($"{assemblyName}.{nameof(DynamicSreAssembly)}", TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class);
+        TypeBuilder typeBuilder = moduleBuilder.DefineType(fullName, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class);
         typeBuilder.SetParent(typeof(DynamicAssembly));
         typeBuilder.AddInterfaceImplementation(interfaceType);
 

@@ -159,11 +159,6 @@ internal sealed class DynamicAsset<TAsset> : IObservable<TAsset> where TAsset : 
 file static class DynamicAssetBuilder
 {
     /// <summary>
-    /// The module builder used to define dynamic types.
-    /// </summary>
-    private static readonly Lazy<ModuleBuilder> s_moduleBuilder = new(CreateModuleBuilder, isThreadSafe: true);
-
-    /// <summary>
     /// Creates a type that represents a dynamic version of the provided asset type.
     /// </summary>
     /// <param name="assetType">The type of the asset for which to make a dynamic version.</param>
@@ -174,9 +169,7 @@ file static class DynamicAssetBuilder
 
         _ = assetType ?? throw new ArgumentNullException(nameof(assetType));
 
-        ModuleBuilder moduleBuilder = s_moduleBuilder.Value;
-        AssemblyBuilder assemblyBuilder = (AssemblyBuilder)moduleBuilder.Assembly;
-
+        using IDisposable context = AssemblyHelper.GetDynamicAssembly(out AssemblyBuilder assemblyBuilder, out ModuleBuilder moduleBuilder);
         string fullName = $"{assetType.FullName}$Dynamic";
         Type? existingType = assemblyBuilder.GetType(fullName, throwOnError: false);
         if (existingType is not null)
@@ -352,18 +345,5 @@ file static class DynamicAssetBuilder
 
         // }
         return copier.CreateDelegate(delegateType);
-    }
-
-    /// <summary>
-    /// Creates and returns a dynamic module builder.
-    /// </summary>
-    /// <returns>A new instance of <see cref="ModuleBuilder"/>.</returns>
-    private static ModuleBuilder CreateModuleBuilder()
-    {
-        string assemblyName = $"{nameof(HotAvalonia)}.{nameof(Assets)}.Dynamic";
-        _ = AssemblyHelper.DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        assemblyBuilder.AllowAccessTo(typeof(DynamicAsset<>));
-
-        return assemblyBuilder.DefineDynamicModule(assemblyName);
     }
 }

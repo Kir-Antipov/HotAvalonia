@@ -10,35 +10,57 @@ namespace HotAvalonia.Helpers;
 internal static class AssemblyHelper
 {
     /// <summary>
-    /// The lazily initialized constructor for the <c>IgnoresAccessChecksToAttribute</c> type.
+    /// The module builder used to define dynamic types.
+    /// </summary>
+    private static readonly ModuleBuilder s_moduleBuilder;
+
+    /// <summary>
+    /// The constructor for the <c>IgnoresAccessChecksToAttribute</c> type.
     /// </summary>
     /// <remarks>
     /// The constructor accepts a single string representing the name of the assembly
     /// which internals you need to access.
     /// </remarks>
-    private static readonly Lazy<ConstructorInfo> s_ignoresAccessChecksToAttribute = new(
-        static () => CreateIgnoresAccessChecksToAttributeType().GetConstructor([typeof(string)]),
-        isThreadSafe: true
-    );
+    private static readonly ConstructorInfo s_ignoresAccessChecksToAttributeCtor;
 
     /// <summary>
-    /// The lazily initialized delegate to get the assembly name from
+    /// A delegate function used to get the assembly name from
     /// an <c>IgnoresAccessChecksToAttribute</c> instance.
     /// </summary>
-    private static readonly Lazy<Func<Attribute, string?>> s_getAssemblyName = new(
-        static () => (Func<Attribute, string?>)Delegate.CreateDelegate(
-            typeof(Func<Attribute, string?>),
-            s_ignoresAccessChecksToAttribute.Value.DeclaringType,
-            $"TryGet{nameof(AssemblyName)}"
-        ),
-        isThreadSafe: true
-    );
+    private static readonly Func<Attribute, string?> s_getAssemblyName;
 
     /// <summary>
     /// A delegate function used to temporarily allow dynamic code generation
     /// even when <c>RuntimeFeature.IsDynamicCodeSupported</c> is <c>false</c>.
     /// </summary>
-    private static readonly Func<IDisposable> s_forceAllowDynamicCode = CreateForceAllowDynamicCodeDelegate();
+    private static readonly Func<IDisposable> s_forceAllowDynamicCode;
+
+    /// <summary>
+    /// Initializes static members of the <see cref="AssemblyHelper"/> class.
+    /// </summary>
+    static AssemblyHelper()
+    {
+        // Enable dynamic code generation, so we can define a dynamic assembly.
+        s_forceAllowDynamicCode = CreateForceAllowDynamicCodeDelegate();
+        using IDisposable context = s_forceAllowDynamicCode();
+
+        // Define the dynamic assembly along with its main module.
+        string assemblyName = $"{nameof(HotAvalonia)}.Dynamic";
+        AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
+        s_moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName);
+
+        // Generate `IgnoresAccessChecksToAttribute`.
+        Type ignoresAccessChecksToAttribute = CreateIgnoresAccessChecksToAttributeType(s_moduleBuilder);
+        s_ignoresAccessChecksToAttributeCtor = ignoresAccessChecksToAttribute.GetInstanceConstructor([typeof(string)])!;
+        s_getAssemblyName = (Func<Attribute, string?>)Delegate.CreateDelegate(
+            typeof(Func<Attribute, string?>),
+            ignoresAccessChecksToAttribute,
+            $"TryGet{nameof(AssemblyName)}"
+        );
+
+        // Allow the dynamic assembly to access HotAvalonia's internals.
+        assemblyBuilder.AllowAccessTo(typeof(AssemblyHelper));
+    }
 
     /// <summary>
     /// Retrieves all loadable types from a given assembly.
@@ -72,12 +94,12 @@ internal static class AssemblyHelper
         if (string.IsNullOrWhiteSpace(targetAssemblyName))
             return;
 
-        ConstructorInfo attributeCtor = s_ignoresAccessChecksToAttribute.Value;
-        Func<Attribute, string?> getAssemblyName = s_getAssemblyName.Value;
+        ConstructorInfo attributeCtor = s_ignoresAccessChecksToAttributeCtor;
+        Func<Attribute, string?> getAssemblyName = s_getAssemblyName;
         IEnumerable<Attribute> definedAttributes = sourceAssembly.GetCustomAttributes(attributeCtor.DeclaringType);
         foreach (Attribute definedAttribute in definedAttributes)
         {
-            if (string.Equals(getAssemblyName(definedAttribute), targetAssemblyName, StringComparison.Ordinal))
+            if (StringComparer.Ordinal.Equals(getAssemblyName(definedAttribute), targetAssemblyName))
                 return;
         }
 
@@ -139,19 +161,16 @@ internal static class AssemblyHelper
     }
 
     /// <summary>
-    /// Defines a new dynamic assembly with the specified name and temporarily allows dynamic code generation.
+    /// Gets the shared dynamic assembly and its associated module.
     /// </summary>
-    /// <param name="assemblyName">The name of the dynamic assembly to define.</param>
-    /// <param name="assembly">The resulting <see cref="AssemblyBuilder"/> instance.</param>
-    /// <returns>
-    /// An <see cref="IDisposable"/> object that, when disposed, will revert the environment
-    /// to its previous state regarding support for dynamic code generation.
-    /// </returns>
-    public static IDisposable DefineDynamicAssembly(string assemblyName, out AssemblyBuilder assembly)
+    /// <param name="assembly">When this method returns, contains the <see cref="AssemblyBuilder"/> instance representing the dynamic assembly.</param>
+    /// <param name="module">When this method returns, contains the <see cref="ModuleBuilder"/> instance representing the module associated with the dynamic assembly.</param>
+    /// <returns>An <see cref="IDisposable"/> object that must be disposed to revoke any dynamic code permissions granted during the method's execution.</returns>
+    public static IDisposable GetDynamicAssembly(out AssemblyBuilder assembly, out ModuleBuilder module)
     {
-        IDisposable dynamicCodeContext = ForceAllowDynamicCode();
-        assembly = AssemblyBuilder.DefineDynamicAssembly(new(assemblyName), AssemblyBuilderAccess.RunAndCollect);
-        return dynamicCodeContext;
+        module = s_moduleBuilder;
+        assembly = (AssemblyBuilder)module.Assembly;
+        return ForceAllowDynamicCode();
     }
 
     /// <summary>
@@ -190,6 +209,7 @@ internal static class AssemblyHelper
     /// <summary>
     /// Creates a dynamic type that represents the <c>System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute</c>.
     /// </summary>
+    /// <param name="moduleBuilder">The module where the attribute should be defined.</param>
     /// <remarks>
     /// This <i>undocumented</i> attribute allows bypassing access checks to internal members of a specified assembly.
     ///
@@ -198,15 +218,9 @@ internal static class AssemblyHelper
     /// to access our internals, the other assembly can happily help itself and freely get to our internal members.
     /// </remarks>
     /// <returns>The dynamically created type that represents <c>IgnoresAccessChecksToAttribute</c>.</returns>
-    private static Type CreateIgnoresAccessChecksToAttributeType()
+    private static Type CreateIgnoresAccessChecksToAttributeType(ModuleBuilder moduleBuilder)
     {
-        const string attributeName = "System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute";
-        const string moduleName = "IgnoresAccessChecksToAttributeDefinition";
-
-        string assemblyName = $"{moduleName}+{Guid.NewGuid():N}";
-        using IDisposable context = DefineDynamicAssembly(assemblyName, out AssemblyBuilder assemblyBuilder);
-        ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(moduleName);
-
+        string attributeName = "System.Runtime.CompilerServices.IgnoresAccessChecksToAttribute";
         TypeBuilder attributeBuilder = moduleBuilder.DefineType(attributeName, TypeAttributes.Class | TypeAttributes.Public, typeof(Attribute));
 
         PropertyBuilder namePropertyBuilder = attributeBuilder.DefineProperty(nameof(AssemblyName), PropertyAttributes.None, typeof(string), Type.EmptyTypes);
