@@ -14,59 +14,14 @@ namespace HotAvalonia;
 public static class AvaloniaRuntimeXamlScanner
 {
     /// <summary>
-    /// The prefix used for identifying methods responsible for building resources.
-    /// </summary>
-    private const string BuildResourceMethodNamePrefix = "Build:";
-
-    /// <summary>
-    /// The prefix used for identifying methods responsible for populating resources.
-    /// </summary>
-    private const string PopulateResourceMethodNamePrefix = "Populate:";
-
-    /// <summary>
-    /// The prefix used for identifying fields responsible for overriding methods that populate resources.
-    /// </summary>
-    private const string PopulateOverrideResourceFieldNamePrefix = "PopulateOverride:";
-
-    /// <summary>
-    /// The prefix used for identifying methods responsible for populating controls.
-    /// </summary>
-    private const string PopulateControlMethodNamePrefix = "!XamlIlPopulate";
-
-    /// <summary>
-    /// The name used for identifying fields responsible for overriding methods that populate controls.
-    /// </summary>
-    private const string PopulateOverrideControlFieldName = "!XamlIlPopulateOverride";
-
-    /// <summary>
-    /// The prefix used for identifying dynamically generated XAML builder classes.
-    /// </summary>
-    private const string DynamicXamlBuilderClassNamePrefix = "Builder_";
-
-    /// <summary>
-    /// The name used for identifying dynamically generated methods responsible for populating controls.
-    /// </summary>
-    private const string DynamicPopulateMethodName = "__AvaloniaXamlIlPopulate";
-
-    /// <summary>
-    /// Represents binding flags for a static member, either public or non-public.
-    /// </summary>
-    private const BindingFlags StaticMember = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-
-    /// <summary>
-    /// Represents binding flags for an instance member, either public or non-public.
-    /// </summary>
-    private const BindingFlags InstanceMember = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-    /// <summary>
     /// The expected parameter types for a valid build method.
     /// </summary>
-    private static readonly Type[] s_buildSignature = new[] { typeof(IServiceProvider) };
+    private static readonly Type[] s_buildSignature = [typeof(IServiceProvider)];
 
     /// <summary>
     /// The expected parameter types for a valid populate method.
     /// </summary>
-    private static readonly Type[] s_populateSignature = new[] { typeof(IServiceProvider), typeof(object) };
+    private static readonly Type[] s_populateSignature = [typeof(IServiceProvider), typeof(object)];
 
     /// <summary>
     /// The dynamically generated assembly containing compiled XAML.
@@ -76,7 +31,7 @@ public static class AvaloniaRuntimeXamlScanner
     /// <summary>
     /// The dynamically generated assembly containing compiled XAML.
     /// </summary>
-    public static DynamicAssembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= GetDynamicXamlAssembly() ?? FindDynamicXamlAssembly();
+    public static DynamicAssembly? DynamicXamlAssembly => s_dynamicXamlAssembly ??= GetDynamicXamlAssembly();
 
     /// <summary>
     /// Retrieves the dynamically generated assembly containing compiled XAML.
@@ -88,46 +43,21 @@ public static class AvaloniaRuntimeXamlScanner
         Type xamlAssembly = xamlLoaderAssembly.GetType("XamlX.TypeSystem.IXamlAssembly") ?? typeof(object);
         Type? xamlIlRuntimeCompiler = xamlLoaderAssembly.GetType("Avalonia.Markup.Xaml.XamlIl.AvaloniaXamlIlRuntimeCompiler");
 
-        MethodInfo? initializeSre = xamlIlRuntimeCompiler?.GetMethod("InitializeSre", StaticMember, null, Type.EmptyTypes, null);
+        MethodInfo? initializeSre = xamlIlRuntimeCompiler?.GetStaticMethod("InitializeSre", Type.EmptyTypes);
         initializeSre?.Invoke(null, null);
 
-        object? sreAsm = xamlIlRuntimeCompiler?.GetField("_sreAsm", StaticMember)?.GetValue(null);
-        object? sreTypeSystem = xamlIlRuntimeCompiler?.GetField("_sreTypeSystem", StaticMember)?.GetValue(null);
+        object? sreAsm = xamlIlRuntimeCompiler?.GetStaticField("_sreAsm")?.GetValue(null);
+        object? sreTypeSystem = xamlIlRuntimeCompiler?.GetStaticField("_sreTypeSystem")?.GetValue(null);
         if (sreAsm is not Assembly asm || sreTypeSystem is null)
             return null;
 
         DynamicAssembly dynamicAssembly = DynamicSreAssembly.Create(asm, sreTypeSystem);
-        object? sreTypeSystemAssemblies = sreTypeSystem.GetType().GetField("_assemblies", InstanceMember)?.GetValue(sreTypeSystem);
+        object? sreTypeSystemAssemblies = sreTypeSystem.GetType().GetInstanceField("_assemblies")?.GetValue(sreTypeSystem);
         MethodInfo? addAssembly = sreTypeSystemAssemblies?.GetType().GetMethod(nameof(List<string>.Add), [xamlAssembly]);
         if (xamlAssembly.IsAssignableFrom(dynamicAssembly.GetType()))
             addAssembly?.Invoke(sreTypeSystemAssemblies, [dynamicAssembly]);
 
         return dynamicAssembly;
-    }
-
-    /// <summary>
-    /// Locates the dynamically generated assembly containing compiled XAML within the current application domain.
-    /// </summary>
-    /// <returns>The dynamically generated assembly if found; otherwise, <c>null</c>.</returns>
-    private static DynamicAssembly? FindDynamicXamlAssembly()
-    {
-        const string dynamicXamlAssemblyMarkerTypeName = "XamlIlContext";
-        const int stringifiedGuidLength = 32; // Guid.NewGuid().ToString("N").Length
-
-        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (!assembly.IsDynamic)
-                continue;
-
-            string name = assembly.GetName().Name;
-            if (name.Length is not stringifiedGuidLength || !Guid.TryParse(name, out _))
-                continue;
-
-            if (assembly.GetLoadedTypes().Any(x => x.Name is dynamicXamlAssemblyMarkerTypeName))
-                return new(assembly);
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -206,7 +136,6 @@ public static class AvaloniaRuntimeXamlScanner
     public static bool TryExtractControlUri(Type? controlType, [NotNullWhen(true)] out string? uri)
     {
         uri = null;
-
         if (controlType is null)
             return false;
 
@@ -232,20 +161,18 @@ public static class AvaloniaRuntimeXamlScanner
         // IL_000e: castclass [System.Runtime]System.Object
         // IL_0013: stelem.ref
         // IL_0014: ldstr "avares://uri" // <-- This is what we are looking for
-        const int commonLdstrLocation = 0x14;
+        const int CommonLdstrLocation = 0x14;
 
         uri = null;
-
         byte[]? methodBody = populateMethod.GetMethodBody()?.GetILAsByteArray();
         if (methodBody is null)
             return false;
 
-        int ldstrLocation = methodBody.Length > commonLdstrLocation && methodBody[commonLdstrLocation] == OpCodes.Ldstr.Value
-            ? commonLdstrLocation
+        int ldstrLocation = methodBody.Length > CommonLdstrLocation && methodBody[CommonLdstrLocation] == OpCodes.Ldstr.Value
+            ? CommonLdstrLocation
             : MethodBodyReader.IndexOf(methodBody, OpCodes.Ldstr.Value);
 
         int uriTokenLocation = ldstrLocation + 1;
-
         if (uriTokenLocation is 0 || uriTokenLocation + sizeof(int) > methodBody.Length)
             return false;
 
@@ -270,10 +197,11 @@ public static class AvaloniaRuntimeXamlScanner
     {
         _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
 
-        MethodInfo? tryLoad = FindTryLoadMethod(assembly);
+        Type? xamlLoader = assembly.GetType("CompiledAvaloniaXaml.!XamlLoader");
+        MethodInfo? tryLoad = xamlLoader?.GetStaticMethods("TryLoad").OrderByDescending(x => x.GetParameters().Length).FirstOrDefault();
         byte[]? tryLoadBody = tryLoad?.GetMethodBody()?.GetILAsByteArray();
         if (tryLoad is null || tryLoadBody is null)
-            return Array.Empty<AvaloniaControlInfo>();
+            return [];
 
         IEnumerable<AvaloniaControlInfo> extractedControls = ExtractAvaloniaControls(tryLoadBody, tryLoad.Module);
         IEnumerable<AvaloniaControlInfo> scannedControls = ScanAvaloniaControls(assembly);
@@ -288,8 +216,6 @@ public static class AvaloniaRuntimeXamlScanner
     /// <returns>An enumerable containing information about extracted Avalonia controls.</returns>
     private static IEnumerable<AvaloniaControlInfo> ExtractAvaloniaControls(ReadOnlyMemory<byte> methodBody, Module module)
     {
-        _ = module ?? throw new ArgumentNullException(nameof(module));
-
         MethodBodyReader reader = new(methodBody);
         string? str = null;
         string? uri = null;
@@ -340,8 +266,6 @@ public static class AvaloniaRuntimeXamlScanner
     /// <returns>An enumerable containing information about the discovered Avalonia controls.</returns>
     private static IEnumerable<AvaloniaControlInfo> ScanAvaloniaControls(Assembly assembly)
     {
-        _ = assembly ?? throw new ArgumentNullException(nameof(assembly));
-
         foreach (Type type in assembly.GetLoadedTypes())
         {
             MethodInfo? populateMethod = FindPopulateControlMethod(type);
@@ -351,8 +275,7 @@ public static class AvaloniaRuntimeXamlScanner
             if (!TryExtractControlUri(populateMethod, out string? uri))
                 continue;
 
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            MethodBase? buildMethod = type.GetConstructor(flags, null, Type.EmptyTypes, null);
+            MethodBase? buildMethod = type.GetInstanceConstructor();
             if (buildMethod is null)
                 continue;
 
@@ -363,69 +286,24 @@ public static class AvaloniaRuntimeXamlScanner
     }
 
     /// <summary>
-    /// Identifies the <c>TryLoad</c> method in a given assembly's <c>XamlLoader</c> type.
-    /// </summary>
-    /// <param name="assembly">The assembly containing the <c>XamlLoader</c> type.</param>
-    /// <returns>The <see cref="MethodInfo"/> object representing the <c>TryLoad</c> method, or <c>null</c> if not found.</returns>
-    private static MethodInfo? FindTryLoadMethod(Assembly assembly) => assembly?
-        .GetType("CompiledAvaloniaXaml.!XamlLoader")?
-        .GetMethods(StaticMember)
-        .Where(static x => "TryLoad".Equals(x.Name, StringComparison.Ordinal))
-        .OrderByDescending(static x => x.GetParameters().Length)
-        .FirstOrDefault();
-
-    /// <summary>
-    /// Finds the <c>InitializeComponent</c> method in relation to the given build method.
-    /// </summary>
-    /// <param name="buildMethod">The build method for which the <c>InitializeComponent</c> method is sought.</param>
-    /// <returns>
-    /// The <see cref="MethodInfo"/> object representing the <c>InitializeComponent</c> method, if found;
-    /// otherwise, <c>null</c>.
-    /// </returns>
-    private static MethodInfo? FindInitializeComponentMethod(MethodBase buildMethod)
-    {
-        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
-
-        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
-            return null;
-
-        return FindInitializeComponentControlMethod(declaringType);
-    }
-
-    /// <summary>
-    /// Finds the <c>InitializeComponent</c> method for a user control.
-    /// </summary>
-    /// <param name="userControlType">The type of the user control for which the <c>InitializeComponent</c> method is sought.</param>
-    /// <returns>
-    /// The <see cref="MethodInfo"/> object representing the <c>InitializeComponent</c> method, if found;
-    /// otherwise, <c>null</c>.
-    /// </returns>
-    private static MethodInfo? FindInitializeComponentControlMethod(Type userControlType)
-    {
-        const string initializeComponentMethodName = "InitializeComponent";
-
-        _ = userControlType ?? throw new ArgumentNullException(nameof(userControlType));
-
-        return userControlType
-            .GetMethods(InstanceMember)
-            .OrderByDescending(static x => x.IsGeneratedByAvalonia())
-            .ThenByDescending(static x => x.GetParameters().Length)
-            .FirstOrDefault(static x =>
-                x.Name.Equals(initializeComponentMethodName, StringComparison.Ordinal)
-                && x.ReturnType == typeof(void));
-    }
-
-    /// <summary>
     /// Discovers named control references within the Avalonia control associated with the given build method.
     /// </summary>
     /// <param name="buildMethod">The build method associated with the control scope to search within.</param>
     /// <returns>An enumerable containing discovered named control references.</returns>
     private static IEnumerable<AvaloniaNamedControlReference> FindAvaloniaNamedControlReferences(MethodBase buildMethod)
     {
-        MethodInfo? initializeComponent = FindInitializeComponentMethod(buildMethod);
+        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
+            return [];
+
+        MethodInfo? initializeComponent = declaringType
+            .GetInstanceMethods("InitializeComponent")
+            .OrderByDescending(static x => x.IsGeneratedByAvalonia())
+            .ThenByDescending(static x => x.GetParameters().Length)
+            .FirstOrDefault(static x => x.ReturnType == typeof(void));
+
         byte[]? initializeComponentBody = initializeComponent?.GetMethodBody()?.GetILAsByteArray();
         if (initializeComponent is null || initializeComponentBody is null)
-            return Array.Empty<AvaloniaNamedControlReference>();
+            return [];
 
         return ExtractAvaloniaNamedControlReferences(initializeComponentBody, initializeComponent.Module);
     }
@@ -470,18 +348,6 @@ public static class AvaloniaRuntimeXamlScanner
         }
     }
 
-    /// <param name="buildMethod">The build method associated with the control.</param>
-    /// <inheritdoc cref="FindAvaloniaHotReloadControlCallbacks"/>
-    private static IEnumerable<MethodInfo> FindAvaloniaHotReloadCallbacks(MethodBase buildMethod)
-    {
-        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
-
-        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
-            return Array.Empty<MethodInfo>();
-
-        return FindAvaloniaHotReloadControlCallbacks(declaringType);
-    }
-
     /// <summary>
     /// Finds all parameterless instance methods within the specified control
     /// that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
@@ -491,17 +357,16 @@ public static class AvaloniaRuntimeXamlScanner
     /// A collection of <see cref="MethodInfo"/> representing all parameterless instance methods
     /// within the provided control that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
     /// </returns>
-    private static IEnumerable<MethodInfo> FindAvaloniaHotReloadControlCallbacks(Type userControlType)
+    private static IEnumerable<MethodInfo> FindAvaloniaHotReloadCallbacks(MethodBase buildMethod)
     {
-        const string AvaloniaHotReloadAttributeName = "HotAvalonia.AvaloniaHotReloadAttribute";
+        if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
+            return [];
 
-        _ = userControlType ?? throw new ArgumentNullException(nameof(userControlType));
-
-        return userControlType
-            .GetMethods(InstanceMember)
+        return declaringType
+            .GetInstanceMethods()
             .Where(static x => x.GetParameters().Length == 0)
             .Where(static x => x.GetCustomAttributes(inherit: true)
-                .Any(static y => y?.GetType().FullName == AvaloniaHotReloadAttributeName));
+                .Any(static y => "HotAvalonia.AvaloniaHotReloadAttribute".Equals(y?.GetType().FullName, StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -534,16 +399,15 @@ public static class AvaloniaRuntimeXamlScanner
     /// <returns>The <see cref="MethodInfo"/> object representing the field, or <c>null</c> if not found.</returns>
     private static FieldInfo? FindPopulateOverrideField(MethodBase buildMethod)
     {
-        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
-
         if (buildMethod.DeclaringType is not Type declaringType)
             return null;
 
-        string populateName = buildMethod.Name.StartsWith(BuildResourceMethodNamePrefix, StringComparison.Ordinal)
-            ? $"{PopulateOverrideResourceFieldNamePrefix}{buildMethod.Name.Substring(BuildResourceMethodNamePrefix.Length)}"
-            : PopulateOverrideControlFieldName;
+        int separatorIndex = buildMethod.Name.IndexOf(':');
+        string populateName = separatorIndex >= 0
+            ? $"PopulateOverride{buildMethod.Name.Substring(separatorIndex)}"
+            : "!XamlIlPopulateOverride";
 
-        FieldInfo? field = declaringType.GetField(populateName, StaticMember);
+        FieldInfo? field = declaringType.GetStaticField(populateName);
         return IsPopulateOverrideField(field) ? field : null;
     }
 
@@ -554,18 +418,15 @@ public static class AvaloniaRuntimeXamlScanner
     /// <returns>The <see cref="MethodInfo"/> object representing the populate method, or <c>null</c> if not found.</returns>
     private static MethodInfo? FindPopulateMethod(MethodBase buildMethod)
     {
-        _ = buildMethod ?? throw new ArgumentNullException(nameof(buildMethod));
-
         if (buildMethod.DeclaringType is not Type declaringType)
             return null;
 
-        if (!buildMethod.Name.StartsWith(BuildResourceMethodNamePrefix, StringComparison.Ordinal))
+        int separatorIndex = buildMethod.Name.IndexOf(':');
+        if (separatorIndex < 0)
             return FindPopulateControlMethod(declaringType);
 
-        string populateName = $"{PopulateResourceMethodNamePrefix}{buildMethod.Name.Substring(BuildResourceMethodNamePrefix.Length)}";
-        return declaringType
-            .GetMethods(StaticMember)
-            .FirstOrDefault(x => x.Name == populateName && IsPopulateMethod(x));
+        string populateName = $"Populate{buildMethod.Name.Substring(separatorIndex)}";
+        return declaringType.GetStaticMethods(populateName).FirstOrDefault(IsPopulateMethod);
     }
 
     /// <summary>
@@ -574,15 +435,11 @@ public static class AvaloniaRuntimeXamlScanner
     /// <param name="userControlType">The type of the user control for which the populate method is sought.</param>
     /// <returns>The <see cref="MethodInfo"/> object representing the populate method, or <c>null</c> if not found.</returns>
     private static MethodInfo? FindPopulateControlMethod(Type userControlType)
-        => userControlType.GetMethod(PopulateControlMethodNamePrefix, StaticMember, null, [typeof(IServiceProvider), userControlType], null);
+        => userControlType.GetStaticMethod("!XamlIlPopulate", [typeof(IServiceProvider), userControlType]);
 
     /// <inheritdoc cref="FindDynamicPopulateMethods(string)"/>
     internal static IEnumerable<MethodInfo> FindDynamicPopulateMethods(Uri uri)
-    {
-        _ = uri ?? throw new ArgumentNullException(nameof(uri));
-
-        return FindDynamicPopulateMethods(uri.ToString());
-    }
+        => FindDynamicPopulateMethods(uri?.ToString()!);
 
     /// <summary>
     /// Searches for populate methods associated with the specified URI within the dynamic XAML assembly.
@@ -591,8 +448,6 @@ public static class AvaloniaRuntimeXamlScanner
     /// <returns>An enumerable containing dynamic populate methods corresponding to the specified URI.</returns>
     internal static IEnumerable<MethodInfo> FindDynamicPopulateMethods(string uri)
     {
-        _ = uri ?? throw new ArgumentNullException(nameof(uri));
-
         Assembly? dynamicXamlAssembly = DynamicXamlAssembly?.Assembly;
         if (dynamicXamlAssembly is null)
             yield break;
@@ -600,25 +455,17 @@ public static class AvaloniaRuntimeXamlScanner
         string safeUri = UriHelper.GetSafeUriIdentifier(uri);
         foreach (Type type in dynamicXamlAssembly.GetLoadedTypes())
         {
-            if (!type.Name.StartsWith(DynamicXamlBuilderClassNamePrefix, StringComparison.Ordinal))
+            if (!type.Name.StartsWith("Builder_", StringComparison.Ordinal))
                 continue;
 
             if (!type.Name.EndsWith(safeUri, StringComparison.Ordinal))
                 continue;
 
-            MethodInfo? populateMethod = type.GetMethod(DynamicPopulateMethodName, StaticMember);
+            MethodInfo? populateMethod = type.GetStaticMethod("__AvaloniaXamlIlPopulate");
             if (IsPopulateMethod(populateMethod))
                 yield return populateMethod;
         }
     }
-
-    /// <summary>
-    /// Determines whether a method qualifies as a dynamic populate method.
-    /// </summary>
-    /// <param name="method">The method to check.</param>
-    /// <returns><c>true</c> if the method is a dynamic populate method; otherwise, <c>false</c>.</returns>
-    internal static bool IsDynamicPopulateMethod(MethodBase method)
-        => DynamicPopulateMethodName.Equals(method?.Name, StringComparison.Ordinal);
 
     /// <summary>
     /// Determines whether the specified member is generated by Avalonia.
@@ -628,16 +475,12 @@ public static class AvaloniaRuntimeXamlScanner
     /// <c>true</c> if the specified member is generated by Avalonia;
     /// otherwise, <c>false</c>.
     /// </returns>
-    internal static bool IsGeneratedByAvalonia(this MemberInfo member)
+    private static bool IsGeneratedByAvalonia(this MemberInfo member)
     {
-        const string avaloniaGeneratorNamePrefix = "Avalonia.Generators.";
-
-        _ = member ?? throw new ArgumentNullException(nameof(member));
-
         GeneratedCodeAttribute? generatedCodeAttribute = member.GetCustomAttribute<GeneratedCodeAttribute>();
         if (generatedCodeAttribute is not { Tool: not null })
             return false;
 
-        return generatedCodeAttribute.Tool.StartsWith(avaloniaGeneratorNamePrefix, StringComparison.Ordinal);
+        return generatedCodeAttribute.Tool.StartsWith("Avalonia.Generators.", StringComparison.Ordinal);
     }
 }
