@@ -12,7 +12,7 @@
     <Button DockPanel.Dock="Bottom"
             HorizontalAlignment="Stretch"
             HorizontalContentAlignment="Center"
-            Command="{ReflectionBinding $parent[Window].DataContext.AddItem}">
+            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AddItem}">
       Add Item
     </Button>
     <ItemsControl ItemsSource="{Binding ToDoItems}">
