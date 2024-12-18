@@ -66,10 +66,13 @@ internal static class AvaloniaControlHelper
             AvaloniaRuntimeXamlScanner.DynamicXamlAssembly?.AllowAccessTo(assembly);
 
         string xamlWithDynamicComponents = MakeStaticComponentsDynamic(xaml);
+        bool useCompiledBindings = AvaloniaRuntimeXamlScanner.UsesCompiledBindingsByDefault(assembly);
+        RuntimeXamlLoaderDocument xamlDocument = new(uri, control, xamlWithDynamicComponents);
+        RuntimeXamlLoaderConfiguration xamlConfig = new() { LocalAssembly = assembly, UseCompiledBindingsByDefault = useCompiledBindings };
         HashSet<MethodInfo> oldPopulateMethods = new(AvaloniaRuntimeXamlScanner.FindDynamicPopulateMethods(uri));
 
         Reset(control, out Action restore);
-        object loadedControl = AvaloniaRuntimeXamlLoader.Load(xamlWithDynamicComponents, assembly, control, uri, designMode: false);
+        object loadedControl = AvaloniaRuntimeXamlLoader.Load(xamlDocument, xamlConfig);
         restore();
 
         compiledPopulateMethod = AvaloniaRuntimeXamlScanner

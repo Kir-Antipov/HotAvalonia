@@ -61,6 +61,30 @@ public static class AvaloniaRuntimeXamlScanner
     }
 
     /// <summary>
+    /// Determines whether the specified assembly uses compiled bindings by default.
+    /// </summary>
+    /// <param name="assembly">The assembly to check for the compiled bindings metadata attribute.</param>
+    /// <returns>
+    /// <c>true</c> if the assembly specifies the <c>AvaloniaUseCompiledBindingsByDefault</c>
+    /// metadata attribute and its value is set to <c>true</c>; otherwise, <c>false</c>.
+    /// </returns>
+    public static bool UsesCompiledBindingsByDefault(Assembly? assembly)
+    {
+        if (assembly is null)
+            return false;
+
+        foreach (AssemblyMetadataAttribute attribute in assembly.GetCustomAttributes<AssemblyMetadataAttribute>())
+        {
+            if (!StringComparer.Ordinal.Equals(attribute.Key, "AvaloniaUseCompiledBindingsByDefault"))
+                continue;
+
+            return bool.TryParse(attribute.Value, out bool value) && value;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Determines whether a method qualifies as a build method.
     /// </summary>
     /// <param name="method">The method to check.</param>
