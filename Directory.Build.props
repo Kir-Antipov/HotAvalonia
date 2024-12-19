@@ -25,6 +25,7 @@
 
   <PropertyGroup>
     <AvaloniaVersion>11.0.0</AvaloniaVersion>
+    <FodyVersion>6.9.1</FodyVersion>
   </PropertyGroup>
 
 </Project>
