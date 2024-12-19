@@ -17,6 +17,7 @@ public sealed class ModuleWeaver : BaseModuleWeaver
     /// </summary>
     public ModuleWeaver() => _features =
     [
+        new PopulateOverrideWeaver(this),
     ];
 
     /// <inheritdoc/>
