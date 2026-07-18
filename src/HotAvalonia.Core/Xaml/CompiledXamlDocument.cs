@@ -25,6 +25,10 @@ public sealed class CompiledXamlDocument : IEquatable<CompiledXamlDocument>
 
     private static readonly FieldInfo? s_stylesAppliedField = typeof(StyledElement).GetInstanceField("_stylesApplied", typeof(bool));
 
+    private static readonly FieldInfo? s_themeAppliedField = typeof(StyledElement).GetInstanceField("_themeApplied", typeof(bool));
+
+    private static readonly FieldInfo? s_implicitThemeField = typeof(StyledElement).GetInstanceField("_implicitTheme");
+
     private static readonly Func<AvaloniaObject, AvaloniaObject?>? s_getInheritanceParent = typeof(AvaloniaObject).GetInstanceProperty("InheritanceParent")?.GetMethod?.CreateDelegate<Func<AvaloniaObject, AvaloniaObject?>>();
 
     internal readonly Uri _uri;
@@ -264,7 +268,11 @@ public sealed class CompiledXamlDocument : IEquatable<CompiledXamlDocument>
     private static void Clear(object? control)
     {
         if (control is StyledElement)
+        {
             s_stylesAppliedField?.SetValue(control, false);
+            s_themeAppliedField?.SetValue(control, false);
+            s_implicitThemeField?.SetValue(control, null);
+        }
 
         (ICollection<KeyValuePair<object, object?>>? resources, ICollection<IStyle>? styles) = control switch
         {
