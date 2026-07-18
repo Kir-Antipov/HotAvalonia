@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>3.1.3</Version>
+    <Version>3.1.4</Version>
     <Author>Kira-NT</Author>
     <ReleaseYear>2023</ReleaseYear>
     <PackageTags>avalonia avaloniaui hot-reload dynamic hot reload xaml axaml ui development tools net netstandard</PackageTags>
