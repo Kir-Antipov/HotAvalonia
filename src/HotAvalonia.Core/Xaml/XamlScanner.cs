@@ -13,11 +13,6 @@ namespace HotAvalonia.Xaml;
 public static class XamlScanner
 {
     /// <summary>
-    /// The expected parameter types for a valid populate method.
-    /// </summary>
-    private static readonly Type[] s_populateSignature = [typeof(IServiceProvider), typeof(object)];
-
-    /// <summary>
     /// Determines whether the specified assembly uses compiled bindings by default.
     /// </summary>
     /// <param name="assembly">The assembly to check for the compiled bindings metadata attribute.</param>
@@ -47,7 +42,7 @@ public static class XamlScanner
     /// <param name="method">The method to check.</param>
     /// <returns><c>true</c> if the method is a valid build method; otherwise, <c>false</c>.</returns>
     public static bool IsBuildMethod([NotNullWhen(true)] MethodBase? method)
-        => method is { IsConstructor: true } || method is MethodInfo { ReturnType: Type t } && t != typeof(void);
+        => method is { IsConstructor: true } || method is MethodInfo { ReturnType: { IsValueType: false } t } && t != typeof(void);
 
     /// <summary>
     /// Determines whether a method qualifies as a populate method.
@@ -55,12 +50,7 @@ public static class XamlScanner
     /// <param name="method">The method to check.</param>
     /// <returns><c>true</c> if the method is a valid populate method; otherwise, <c>false</c>.</returns>
     public static bool IsPopulateMethod([NotNullWhen(true)] MethodBase? method)
-    {
-        if (method is null)
-            return false;
-
-        return MethodHelper.IsSignatureAssignableFrom(s_populateSignature, method);
-    }
+        => method?.GetParameters() is [{ ParameterType: Type t }, { ParameterType.IsValueType: false }] && t.IsAssignableFrom(typeof(IServiceProvider));
 
     /// <summary>
     /// Determines whether a field qualifies as a populate override.
@@ -68,12 +58,7 @@ public static class XamlScanner
     /// <param name="field">The field to check.</param>
     /// <returns><c>true</c> if the field is a valid populate override; otherwise, <c>false</c>.</returns>
     public static bool IsPopulateOverrideField([NotNullWhen(true)] FieldInfo? field)
-    {
-        if (field is not { IsStatic: true, IsInitOnly: false })
-            return false;
-
-        return field.FieldType == typeof(Action<object>) || field.FieldType == typeof(Action<IServiceProvider?, object>);
-    }
+        => field is { IsStatic: true, IsInitOnly: false, FieldType: Type t } && (t == typeof(Action<object>) || t == typeof(Action<IServiceProvider?, object>));
 
     /// <summary>
     /// Attempts to extract the URI associated with the XAML document
@@ -187,12 +172,6 @@ public static class XamlScanner
         return extractedDocuments.Concat(foundDocuments).Distinct();
     }
 
-    /// <summary>
-    /// Extracts information about pre-compiled XAML from the IL of the given method body.
-    /// </summary>
-    /// <param name="methodBody">The IL method body to scan.</param>
-    /// <param name="module">The module containing the method body.</param>
-    /// <returns>An enumerable containing compiled XAML documents.</returns>
     private static IEnumerable<CompiledXamlDocument> ExtractDocuments(ReadOnlyMemory<byte> methodBody, Module module)
     {
         MethodBodyReader reader = new(methodBody);
@@ -232,11 +211,6 @@ public static class XamlScanner
         }
     }
 
-    /// <summary>
-    /// Searches for compiled XAML documents located in the given assembly.
-    /// </summary>
-    /// <param name="assembly">The assembly to scan for pre-compiled XAML.</param>
-    /// <returns>An enumerable containing compiled XAML documents.</returns>
     private static IEnumerable<CompiledXamlDocument> FindDocuments(Assembly assembly)
     {
         foreach (Type type in assembly.GetLoadedTypes())
@@ -248,10 +222,7 @@ public static class XamlScanner
             if (!TryExtractDocumentUri(populateMethod, out Uri? uri))
                 continue;
 
-            MethodBase? buildMethod = type.GetInstanceConstructor();
-            buildMethod ??= type.GetInstanceConstructor([typeof(IServiceProvider)]);
-            buildMethod ??= type.GetInstanceConstructors().OrderBy(x => x.GetParameters().Length).FirstOrDefault();
-            if (buildMethod is null)
+            if (GetControlConstructor(type) is not ConstructorInfo buildMethod)
                 continue;
 
             FieldInfo? populateOverrideField = FindPopulateOverrideField(buildMethod);
@@ -260,11 +231,6 @@ public static class XamlScanner
         }
     }
 
-    /// <summary>
-    /// Discovers named control references within the control associated with the given build method.
-    /// </summary>
-    /// <param name="buildMethod">The build method associated with the control scope to search within.</param>
-    /// <returns>An enumerable containing discovered named control references.</returns>
     private static IEnumerable<NamedControlReference> FindNamedControlReferences(MethodBase buildMethod)
     {
         if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
@@ -283,12 +249,6 @@ public static class XamlScanner
         return ExtractNamedControlReferences(initializeComponentBody, initializeComponent.Module);
     }
 
-    /// <summary>
-    /// Extracts named control references from the IL of the given method body.
-    /// </summary>
-    /// <param name="methodBody">The IL method body to scan.</param>
-    /// <param name="module">The module containing the method body.</param>
-    /// <returns>An enumerable containing extracted named control references.</returns>
     private static IEnumerable<NamedControlReference> ExtractNamedControlReferences(ReadOnlyMemory<byte> methodBody, Module module)
     {
         ArgumentNullException.ThrowIfNull(module);
@@ -321,15 +281,6 @@ public static class XamlScanner
         }
     }
 
-    /// <summary>
-    /// Finds all parameterless instance methods within the specified control
-    /// that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
-    /// </summary>
-    /// <param name="userControlType">The type to inspect for hot reload callback methods.</param>
-    /// <returns>
-    /// A collection of <see cref="MethodInfo"/> representing all parameterless instance methods
-    /// within the provided control that are decorated with the <c>AvaloniaHotReloadAttribute</c>.
-    /// </returns>
     private static IEnumerable<MethodInfo> FindAvaloniaHotReloadCallbacks(MethodBase buildMethod)
     {
         if (buildMethod is not { IsConstructor: true, DeclaringType: Type declaringType })
@@ -342,15 +293,6 @@ public static class XamlScanner
                 .Any(static y => "HotAvalonia.AvaloniaHotReloadAttribute".Equals(y?.GetType().FullName, StringComparison.Ordinal)));
     }
 
-    /// <summary>
-    /// Constructs a combined refresh callback for a control, aggregating
-    /// hot reload methods and named control refresh actions.
-    /// </summary>
-    /// <param name="buildMethod">The build method associated with the control.</param>
-    /// <returns>
-    /// A delegate that, when invoked, executes all associated refresh actions for
-    /// the control, including hot reload callbacks and named control refresh methods.
-    /// </returns>
     private static Action<object> GetControlRefreshCallback(MethodBase buildMethod)
     {
         Action<object>[] callbacks = FindNamedControlReferences(buildMethod)
@@ -365,11 +307,6 @@ public static class XamlScanner
         return (Action<object>)Delegate.Combine(callbacks);
     }
 
-    /// <summary>
-    /// Finds the populate override field in relation to the given build method.
-    /// </summary>
-    /// <param name="buildMethod">The build method for which the field is sought.</param>
-    /// <returns>The <see cref="MethodInfo"/> object representing the field, or <c>null</c> if not found.</returns>
     private static FieldInfo? FindPopulateOverrideField(MethodBase buildMethod)
     {
         if (buildMethod.DeclaringType is not Type declaringType)
@@ -384,11 +321,6 @@ public static class XamlScanner
         return IsPopulateOverrideField(field) ? field : null;
     }
 
-    /// <summary>
-    /// Finds the populate method in relation to the given build method.
-    /// </summary>
-    /// <param name="buildMethod">The build method for which the populate method is sought.</param>
-    /// <returns>The <see cref="MethodInfo"/> object representing the populate method, or <c>null</c> if not found.</returns>
     private static MethodInfo? FindPopulateMethod(MethodBase buildMethod)
     {
         if (buildMethod.DeclaringType is not Type declaringType)
@@ -402,13 +334,11 @@ public static class XamlScanner
         return declaringType.GetStaticMethods(populateName).FirstOrDefault(IsPopulateMethod);
     }
 
-    /// <summary>
-    /// Finds the populate method for a user control.
-    /// </summary>
-    /// <param name="userControlType">The type of the user control for which the populate method is sought.</param>
-    /// <returns>The <see cref="MethodInfo"/> object representing the populate method, or <c>null</c> if not found.</returns>
     private static MethodInfo? FindPopulateControlMethod(Type userControlType)
         => userControlType.GetStaticMethod("!XamlIlPopulate", [typeof(IServiceProvider), userControlType]);
+
+    internal static ConstructorInfo? GetControlConstructor(Type userControlType)
+        => userControlType.GetInstanceConstructor() ?? userControlType.GetInstanceConstructor([typeof(IServiceProvider)]) ?? userControlType.GetInstanceConstructors().OrderBy(static x => x.GetParameters().Length).FirstOrDefault();
 
     private static bool TryCreatePopulateDelegate([NotNullWhen(true)] MethodInfo? populateMethod, [NotNullWhen(true)] out Action<IServiceProvider?, object>? populateDelegate)
     {

@@ -135,27 +135,6 @@ internal static class MethodHelper
         ]);
 
     /// <summary>
-    /// Validates the compatibility of a method's parameter types with a given signature.
-    /// </summary>
-    /// <param name="signature">An array of types that define the expected method parameter types.</param>
-    /// <param name="method">The method under examination.</param>
-    /// <returns>A boolean value indicating whether the method's parameter types align with the provided signature.</returns>
-    public static bool IsSignatureAssignableFrom(Type[] signature, MethodBase method)
-    {
-        ParameterInfo[] parameters = method.GetParameters();
-        if (parameters.Length != signature.Length)
-            return false;
-
-        for (int i = 0; i < signature.Length; ++i)
-        {
-            if (!signature[i].IsAssignableFrom(parameters[i].ParameterType))
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Obtains the function pointer for a given method.
     /// </summary>
     /// <param name="method">The method for which to obtain the function pointer.</param>

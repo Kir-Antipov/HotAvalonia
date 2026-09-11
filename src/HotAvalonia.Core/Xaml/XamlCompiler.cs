@@ -140,9 +140,13 @@ public static class XamlCompiler
     /// <returns>A <see cref="CompiledXamlDocument"/> representing the compiled XAML.</returns>
     private static CompiledXamlDocument CreateCompiledXamlDocument(Uri uri, Type compiledXamlType)
     {
-        MethodInfo? buildMethod = compiledXamlType.GetStaticMethod(BuildMethodName);
         MethodInfo? populateMethod = compiledXamlType.GetStaticMethod(PopulateMethodName);
-        if (buildMethod is null || populateMethod is null)
+        if (populateMethod is null)
+            ArgumentException.Throw(nameof(compiledXamlType));
+
+        MethodBase? buildMethod = compiledXamlType.GetStaticMethod(BuildMethodName);
+        buildMethod ??= XamlScanner.GetControlConstructor(populateMethod.GetParameters()[^1].ParameterType);
+        if (buildMethod is null)
             ArgumentException.Throw(nameof(compiledXamlType));
 
         return new(uri, buildMethod, populateMethod.CreateUnsafeDelegate<Action<IServiceProvider?, object>>(), null, null);
@@ -272,7 +276,7 @@ public static class XamlCompiler
             throw new NotSupportedException("Provided method contains unsupported exception block(s).");
 
         Module module = compile.Module;
-        string name = $"<Recompiled{Guid.NewGuid():N}>{compile.Name}";
+        string name = $"{compile.DeclaringType}.CompileGroupSreCore";
         Type returnType = typeof(IEnumerable<Type>);
         Type[] parameterTypes = compile.GetParameterTypes();
         using IDisposable ctx = MethodHelper.DefineDynamicMethod(name, returnType, parameterTypes, out DynamicMethod recompiled);
@@ -359,7 +363,7 @@ public static class XamlCompiler
                         // attribute, so it ends up doing it again and again, bloating the assembly builder's
                         // metadata and leaking memory faster than we absolutely need to.
                         // So, to fix this, we simply replace the call to the offending method with a no-op stub.
-                        case { Name: "EmitIgnoresAccessCheckToAttribute" }:
+                        case { Name: nameof(EmitIgnoresAccessCheckToAttribute) }:
                             static void EmitIgnoresAccessCheckToAttribute(AssemblyName assemblyName) => _ = assemblyName;
                             il.Emit(reader.OpCode, new Action<AssemblyName>(EmitIgnoresAccessCheckToAttribute).Method);
                             continue;
@@ -374,9 +378,62 @@ public static class XamlCompiler
                         // For the sake of simplicity, we replace it with a stub that always returns an empty set
                         // (unfortunately, it must be allocated anew each and every time, but given that we are
                         // working with dynamic code generation, it honestly doesn't matter).
-                        case { Name: "FindAssembliesGrantingInternalAccess" }:
+                        case { Name: nameof(FindAssembliesGrantingInternalAccess) }:
                             static HashSet<Assembly> FindAssembliesGrantingInternalAccess(Assembly assembly) => [];
                             il.Emit(reader.OpCode, new Func<Assembly, HashSet<Assembly>>(FindAssembliesGrantingInternalAccess).Method);
+                            continue;
+
+                        // AvaloniaXamlIlRuntimeCompiler automatically creates a Build method for every provided
+                        // document, since it is designed to immediately instantiate a control compiled from
+                        // the provided XAML. This feature is not only useless to us, as we only work with
+                        // already-instantiated user controls that simply need to be repopulated, but
+                        // it also artificially limits the kinds of controls we are able to compile:
+                        // if a control does not define a parameterless ctor or a ctor accepting a single
+                        // IServiceProvider, LoadGroupSreCore will throw an exception stating that
+                        // it's unable to create a Build method for such a scenario.
+                        //
+                        // In order to circumvent this, we need to patch out a call
+                        // to the offending DefineBuildMethod method.
+                        //
+                        // In older Avalonia versions, this was quite straightforward, as the method was called
+                        // directly from LoadGroupSreCore. The only thing worth noting here is that, at some
+                        // point, its signature changed slightly, with the last parameter morphing from
+                        // `bool isPublic` into `XamlVisibility visibility`.
+                        // However, in IL, all numeric values that are smaller than or equal in size to int32
+                        // (including booleans and int32-based enums) are handled as int32s, so it's safe
+                        // to use the same substitute method that accepts an `int` in their place.
+                        //
+                        // In modern versions of Avalonia, however, the call to DefineBuildMethod was moved into
+                        // a lazily invoked delegate. As a result, patching it out directly would require us
+                        // to create a copy of yet another method, which would be somewhat cumbersome and
+                        // more involved than I would like.
+                        //
+                        // Alternatively, we can take advantage of the fact that the delegate calls the offending
+                        // method conditionally and manipulate its logic to achieve the same outcome.
+                        // LoadGroupSreCore supports populating already-existing instances: when provided with
+                        // one, it does not attempt to create a builder method. To capitalize on that, we
+                        // hijack a call to the `IEnumerator<RuntimeXamlLoaderDocument>.Current` getter,
+                        // replacing the value it returns with one whose `RootInstance` is set to a bogus
+                        // value; then we replace all calls to the `RuntimeXamlLoaderDocument.RootInstance`
+                        // getter with one that always returns null. This allows the rest of the method
+                        // to remain blissfully unaware of its existence, while the delegate that captures
+                        // the document instance sees that RootInstance is not null and therefore does not
+                        // emit a Build method. As simple as that.
+                        case { Name: nameof(DefineBuildMethod) } m when (reader.OpCode == OpCodes.Callvirt || reader.OpCode == OpCodes.Call) && m.GetParameters() is [_, _, _, { ParameterType: Type p }] && (p == typeof(bool) || p.IsEnum && p.GetEnumUnderlyingType() == typeof(int)):
+                            static object? DefineBuildMethod(object? compiler, object? builder, object? parsed, object? buildName, int visibility) => null;
+                            il.Emit(OpCodes.Call, new Func<object?, object?, object?, object?, int, object?>(DefineBuildMethod).Method);
+                            continue;
+
+                        // ^^^^^^^^^^
+                        case { DeclaringType.IsValueType: false, Name: nameof(get_Current) } m when (reader.OpCode == OpCodes.Callvirt || reader.OpCode == OpCodes.Call) && typeof(IEnumerator<RuntimeXamlLoaderDocument>).IsAssignableFrom(m.DeclaringType):
+                            static RuntimeXamlLoaderDocument get_Current(IEnumerator<RuntimeXamlLoaderDocument> e) => new(e.Current.BaseUri, Array.Empty<object>(), e.Current.XamlStream) { ServiceProvider = e.Current.ServiceProvider };
+                            il.Emit(OpCodes.Call, new Func<IEnumerator<RuntimeXamlLoaderDocument>, RuntimeXamlLoaderDocument>(get_Current).Method);
+                            continue;
+
+                        // ^^^^^^^^^^
+                        case { DeclaringType.Name: nameof(RuntimeXamlLoaderDocument), Name: nameof(get_RootInstance) } when reader.OpCode == OpCodes.Callvirt || reader.OpCode == OpCodes.Call:
+                            static object? get_RootInstance(RuntimeXamlLoaderDocument document) => null;
+                            il.Emit(OpCodes.Call, new Func<RuntimeXamlLoaderDocument, object?>(get_RootInstance).Method);
                             continue;
 
                         // `LoadGroupSreCore` uses `types.Zip(documents, (x, y) => (x, y)).Select(...).ToArray()`
@@ -388,6 +445,8 @@ public static class XamlCompiler
                         case { DeclaringType.Name: nameof(Enumerable), Name: nameof(Enumerable.Zip) }:
                             il.Emit(OpCodes.Pop);
                             il.Emit(OpCodes.Pop);
+                            il.Emit(OpCodes.Nop);
+                            il.Emit(OpCodes.Nop);
                             il.Emit(OpCodes.Ret);
                             return recompiled.CreateDelegate<CompileXamlFunc>();
 
