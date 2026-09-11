@@ -15,7 +15,7 @@ internal sealed class CodeCaveCallbackInjector : RuntimeCallbackInjector
     /// Gets a value indicating whether this injector is supported in the current environment.
     /// </summary>
     public static bool IsSupported => RuntimeInformation.ProcessArchitecture
-        is Architecture.X86 or Architecture.X64 or Architecture.Arm64 && IsJitOptimizerDisabled;
+        is Architecture.X86 or Architecture.X64 && IsJitOptimizerDisabled;
 
     public override InjectionType InjectionType => InjectionType.CodeCave;
 
