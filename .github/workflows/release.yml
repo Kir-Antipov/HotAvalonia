@@ -20,10 +20,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v6
 
       - name: Build (Debug)
         run: dotnet build -tl -c Debug
@@ -37,11 +37,24 @@ jobs:
       - name: Create NuGet packages
         run: dotnet pack -tl -c Release --no-build -o "${{ env.BUILD_OUTPUT }}"
 
+      - name: Fetch NuGet API Key
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ github.repository_owner }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: build
+          if-no-files-found: error
+          path: ${{ env.BUILD_OUTPUT }}/*.nupkg
+
       - name: Upload NuGets to GitHub
-        uses: Kira-NT/mc-publish@v3.3
+        uses: Kira-NT/mc-publish@v3
         with:
           files: ${{ env.BUILD_OUTPUT }}/*.nupkg
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload NuGets to NuGet.org
-        run: dotnet nuget push "${{ env.BUILD_OUTPUT }}/*.nupkg" --api-key "${{ secrets.NUGET_TOKEN }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+        run: dotnet nuget push "${{ env.BUILD_OUTPUT }}/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
